@@ -97,6 +97,15 @@ pip install groundkit      # or: pip install -e . from a clone
 
 Python ≥ 3.9, no runtime dependencies.
 
+## Related
+
+Part of a set of four small libraries for not trusting an unverified LLM output:
+
+- [stigma](https://github.com/ss1738/stigma): aggregate many models with consensus that learns which to trust
+- [disco](https://github.com/ss1738/disco): search with a verifier (an open FunSearch)
+- **groundkit** (this repo): ground a model's output against a source
+- [certain](https://github.com/ss1738/certain): calibrate confidence and abstain
+
 ## License
 
 MIT © 2026 Satyawan Singh
