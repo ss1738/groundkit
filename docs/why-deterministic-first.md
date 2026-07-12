@@ -1,7 +1,7 @@
 # Authority and generation should never be the same source
 
 An LLM is a brilliant *proposer* and an unreliable *authority*. The mistake most
-pipelines make is letting it be both — the model generates a value and, by virtue
+pipelines make is letting it be both, the model generates a value and, by virtue
 of being the thing that spoke last, that value is treated as fact. A hallucinated
 company number, a wrong CEO, an invented statistic: all delivered to the user with
 the same confidence as the correct fields around them.
@@ -13,13 +13,13 @@ and authority always wins.
 ## Two layers
 
 **Layer 1 is deterministic and the model never touches it.** You give groundkit a
-source you actually trust — a register, a database, retrieved passages. Each claim
+source you actually trust, a register, a database, retrieved passages. Each claim
 the model produced is checked against it:
 
-- `VERIFIED` — the claim matches the source.
-- `CONTRADICTED` — the source disagrees. The **source's** value is kept; the
+- `VERIFIED`, the claim matches the source.
+- `CONTRADICTED`, the source disagrees. The **source's** value is kept; the
   model's rejected claim is recorded in a note, never surfaced.
-- `ADVISORY` — the source has no record, so the claim can't be checked. It's kept
+- `ADVISORY`, the source has no record, so the claim can't be checked. It's kept
   but explicitly labelled as an unverified model claim.
 
 **Layer 2 is whatever the LLM adds**, and by construction it can only ever be
@@ -33,7 +33,7 @@ always knows what's safe. `trusted()` gives you only the `VERIFIED` subset.
 
 The important property is what happens when the source *doesn't* know. Trust-the-
 model gives you a confident guess dressed as fact. groundkit gives you an explicit
-`ADVISORY` tag — the absence of verification is made visible, not hidden. You get
+`ADVISORY` tag, the absence of verification is made visible, not hidden. You get
 to decide (show it with a caveat, ask a human, drop it) instead of the model
 deciding for you by omission.
 
@@ -67,7 +67,7 @@ report.faithful       # False
 report.redacted()     # "The Eiffel Tower was completed in 1889."
 ```
 
-The check is lexical — it catches sentences that introduce content the evidence
+The check is lexical, it catches sentences that introduce content the evidence
 doesn't contain, which is the common RAG failure. It won't judge paraphrase-level
 entailment; swap in an NLI model where you need that. But for "did the model make
 something up that isn't in the sources", overlap is cheap, dependency-free, and

@@ -1,9 +1,9 @@
 # Launch copy for groundkit
 
 ## Show HN title (pick one)
-- **Show HN: groundkit – let your LLM propose, but never assert a fact**
-- Show HN: groundkit – deterministic-first grounding to stop LLM hallucinations
-- Show HN: Every LLM value carries provenance – nothing unverified reaches the user
+- **Show HN: groundkit, let your LLM propose, but never assert a fact**
+- Show HN: groundkit, deterministic-first grounding to stop LLM hallucinations
+- Show HN: Every LLM value carries provenance, nothing unverified reaches the user
 
 ## Show HN body
 
@@ -22,12 +22,12 @@ Two layers:
    the *source's* value is kept, never the model's), or `ADVISORY` (nothing to
    check it against). Free-text answers are checked sentence-by-sentence against
    the evidence they were supposed to use.
-2. **Advisory.** Whatever the LLM adds is, by construction, tagged `ADVISORY` — it
+2. **Advisory.** Whatever the LLM adds is, by construction, tagged `ADVISORY`, it
    is never promoted to fact.
 
 Every value comes back tagged with its provenance, and `trusted()` hands you only
 the verified subset. On a 5,000-record benchmark with a model hallucinating 20% of
-fields: **trust-the-model surfaces 2,927 wrong facts; groundkit surfaces 0** —
+fields: **trust-the-model surfaces 2,927 wrong facts; groundkit surfaces 0**,
 every contradiction caught deterministically, every unverifiable claim labelled
 rather than asserted.
 
@@ -36,7 +36,7 @@ that introduces content the sources don't support, and can redact it.
 
 Repo, tests, benchmark: https://github.com/ss1738/groundkit
 
-Honest scope: the text check is lexical (content-word overlap) — it catches
+Honest scope: the text check is lexical (content-word overlap), it catches
 sentences that add unsupported content, the common RAG failure, but not
 paraphrase-level entailment; drop in an NLI model for that. The structured layer
 is exact and is where the 100% catch rate comes from. Feedback welcome.
@@ -47,16 +47,16 @@ The design principle is that authority and generation should be different source
 An LLM is a great *proposer* and an unreliable *authority*, so groundkit never
 lets it be the authority: the deterministic layer always wins, and the model's
 contribution is quarantined as ADVISORY until something trustworthy confirms it.
-The nice property is that this fails safe — if the source has no record, you don't
+The nice property is that this fails safe, if the source has no record, you don't
 get a confident guess presented as fact, you get an explicit "unverified" tag the
 caller has to decide what to do with.
 
 ## Part of a trio
-groundkit is one of three small libraries on the same theme — don't trust an
+groundkit is one of three small libraries on the same theme, don't trust an
 unverified LLM output:
-- stigma — aggregate many models (consensus that learns which to trust)
-- disco — search with a verifier (open FunSearch)
-- groundkit — ground a single model's output (this one)
+- stigma, aggregate many models (consensus that learns which to trust)
+- disco, search with a verifier (open FunSearch)
+- groundkit, ground a single model's output (this one)
 
 ## Where else to post
 - r/MachineLearning ("[P] ..."), r/LocalLLaMA, r/Rag

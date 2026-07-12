@@ -14,9 +14,11 @@ presented as truth. Pure Python, zero dependencies.
 from groundkit import FactStore, ground_record, trusted
 
 store  = FactStore({"capital_of_france": "Paris", "ceo_of_acme": "Jane Doe"})
-record = {"capital_of_france": "Lyon",   # model got it wrong
-          "ceo_of_acme": "Jane Doe",     # right
-          "acme_founded": "1990"}        # unverifiable
+record = {
+    "capital_of_france": "Lyon",   # model got it wrong (source says Paris)
+    "ceo_of_acme": "Jane Doe",     # right
+    "acme_founded": "1990",        # unverifiable, not in the source
+}
 
 grounded = ground_record(store, record)
 grounded["capital_of_france"].provenance   # Provenance.CONTRADICTED  -> value "Paris" (source wins)
@@ -28,11 +30,11 @@ trusted(grounded)                          # {"ceo_of_acme": "Jane Doe"}  -- saf
 
 Two layers, borrowed from how you'd build a system you actually trust:
 
-- **Layer 1 — deterministic.** Facts are checked against an authoritative source
+- **Layer 1: deterministic.** Facts are checked against an authoritative source
   (a register, a database, retrieved passages). Exact, no model involved. A claim
   is `VERIFIED`, `CONTRADICTED` (and the *source* value is kept, never the
   model's), or `ADVISORY` (no record to check it against).
-- **Layer 2 — advisory only.** Whatever an LLM contributes is, by construction,
+- **Layer 2: advisory only.** Whatever an LLM contributes is, by construction,
   tagged `ADVISORY`. It's never promoted to fact.
 
 Every value comes back as a `Grounded(value, provenance, source, note)`, so the
@@ -41,13 +43,15 @@ subset.
 
 ## Benchmark: wrong facts reaching the user
 
-`benchmarks/bench_grounding.py` — 5,000 records, a model hallucinating 20% of
+`benchmarks/bench_grounding.py`: 5,000 records, a model hallucinating 20% of
 verifiable fields, plus unverifiable extras:
 
 | Policy | Wrong facts surfaced as truth |
 |---|---|
 | Trust the model | 2,927 |
 | **groundkit** | **0** |
+
+![groundkit: wrong facts reaching the user, lower is better](docs/benchmark.png)
 
 groundkit catches **100%** of hallucinated fields deterministically (the
 authoritative value is kept) and labels every unverifiable claim `ADVISORY`
@@ -71,16 +75,16 @@ report.redacted()          # "The Eiffel Tower was completed in 1889."
 report.flagged()           # "... 1889. It is the most visited monument on Earth. [UNSUPPORTED]"
 ```
 
-The support check is lexical and dependency-free — it catches sentences that
+The support check is lexical and dependency-free; it catches sentences that
 introduce content absent from the evidence (the common RAG failure). It doesn't
 judge paraphrase-level entailment; drop in an NLI model for that.
 
 ## API
 
-- **`FactStore(facts)`** — `.has` / `.get` / `.matches` / `.add`, whitespace- and
+- **`FactStore(facts)`**: `.has` / `.get` / `.matches` / `.add`, whitespace- and
   case-normalised comparison.
 - **`ground_record(store, record) -> {key: Grounded}`**, **`verify_claim(...)`**
-- **`trusted(grounded)`** — VERIFIED values only. **`contradictions(grounded)`**.
+- **`trusted(grounded)`**: VERIFIED values only. **`contradictions(grounded)`**.
 - **`ground_text(answer, sources, threshold=0.6) -> GroundingReport`** with
   `.faithful`, `.supported_ratio`, `.unsupported`, `.flagged()`, `.redacted()`.
 - **`Provenance`**: `VERIFIED` · `CONTRADICTED` · `ADVISORY` · `UNSUPPORTED`.
