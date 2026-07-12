@@ -34,7 +34,7 @@ rather than asserted.
 It also does RAG faithfulness: `ground_text(answer, sources)` flags any sentence
 that introduces content the sources don't support, and can redact it.
 
-Repo, tests, benchmark: <REPO_URL>
+Repo, tests, benchmark: https://github.com/ss1738/groundkit
 
 Honest scope: the text check is lexical (content-word overlap) — it catches
 sentences that add unsupported content, the common RAG failure, but not

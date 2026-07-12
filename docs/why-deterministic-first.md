@@ -83,4 +83,4 @@ record = {"ceo": "John Smith"}          # model got it wrong
 trusted(ground_record(store, record))   # {}  -- the wrong value never reaches the user
 ```
 
-Code, tests, benchmark: <REPO_URL>
+Code, tests, benchmark: https://github.com/ss1738/groundkit
