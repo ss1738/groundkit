@@ -71,10 +71,19 @@ def test_ground_text_supported_and_unsupported():
     report = ground_text(answer, sources)
     assert report.sentences[0].supported is True
     assert report.sentences[1].supported is False   # "largest firm in Europe" unbacked
+    assert report.sentences[0].provenance is Provenance.VERIFIED
+    assert report.sentences[1].provenance is Provenance.UNSUPPORTED
     assert report.faithful is False
     assert len(report.unsupported) == 1
     assert "[UNSUPPORTED]" in report.flagged()
     assert "largest firm" not in report.redacted()
+
+
+def test_non_latin_sentence_is_not_vacuously_supported():
+    # A non-Latin sentence must not pass as supported against unrelated evidence.
+    report = ground_text("北京是中国的首都。", ["The capital of France is Paris."])
+    assert report.sentences[0].supported is False
+    assert report.faithful is False
 
 
 def test_fully_faithful_answer():

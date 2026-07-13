@@ -89,6 +89,8 @@ wrong-value detection, use the structured layer above.
 - **`trusted(grounded)`**: VERIFIED values only. **`contradictions(grounded)`**.
 - **`ground_text(answer, sources, threshold=0.6) -> GroundingReport`** with
   `.faithful`, `.supported_ratio`, `.unsupported`, `.flagged()`, `.redacted()`.
+  Each `.sentences[i]` is a `SentenceVerdict` carrying `.supported` and
+  `.provenance` (`VERIFIED` / `UNSUPPORTED`).
 - **`Provenance`**: `VERIFIED` · `CONTRADICTED` · `ADVISORY` · `UNSUPPORTED`.
 
 ## Install

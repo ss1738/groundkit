@@ -28,7 +28,9 @@ _STOPWORDS = {
 
 
 def _content_tokens(text: str) -> list[str]:
-    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    # \w is Unicode-aware, so non-Latin scripts (CJK, Cyrillic, accented Latin)
+    # produce real tokens instead of vanishing and being vacuously "supported".
+    tokens = re.findall(r"\w+", text.lower())
     return [t for t in tokens if len(t) > 1 and t not in _STOPWORDS]
 
 
