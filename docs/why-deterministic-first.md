@@ -67,11 +67,13 @@ report.faithful       # False
 report.redacted()     # "The Eiffel Tower was completed in 1889."
 ```
 
-The check is lexical, it catches sentences that introduce content the evidence
-doesn't contain, which is the common RAG failure. It won't judge paraphrase-level
-entailment; swap in an NLI model where you need that. But for "did the model make
-something up that isn't in the sources", overlap is cheap, dependency-free, and
-surprisingly effective.
+The check is lexical: it flags sentences whose content words are largely absent
+from the evidence, which is the common RAG failure. It won't catch a single swapped
+token (a wrong number, a negation) in an otherwise-grounded sentence, and it isn't
+entailment, so swap in an NLI model where you need that. For catching a wrong value
+exactly, the structured layer above is the right tool; for "did the model bolt on a
+whole claim that isn't in the sources", the lexical overlap is cheap, dependency-free,
+and surprisingly effective.
 
 ## Try it
 

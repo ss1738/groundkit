@@ -75,9 +75,11 @@ report.redacted()          # "The Eiffel Tower was completed in 1889."
 report.flagged()           # "... 1889. It is the most visited monument on Earth. [UNSUPPORTED]"
 ```
 
-The support check is lexical and dependency-free; it catches sentences that
-introduce content absent from the evidence (the common RAG failure). It doesn't
-judge paraphrase-level entailment; drop in an NLI model for that.
+The support check is lexical and dependency-free: it flags sentences whose content
+words are largely absent from the evidence (the common RAG failure). It is not
+entailment, so a mostly-grounded sentence that swaps a single token (a wrong number,
+a negation) can still pass; use an NLI model where that matters. For exact
+wrong-value detection, use the structured layer above.
 
 ## API
 

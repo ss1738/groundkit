@@ -4,15 +4,20 @@ Splits an answer into sentences and checks each one against the provided source
 passages: a sentence is supported when enough of its content words appear in some
 source. Unsupported sentences are flagged, never trusted.
 
-This check is deliberately lexical and dependency-free -- it catches sentences
-that introduce content absent from the evidence (the common RAG failure). It does
-*not* judge paraphrase-level entailment; swap in an NLI model for that if needed.
+This check is deliberately lexical and dependency-free: it flags sentences whose
+content words are largely absent from the evidence (the common RAG failure). It is
+not entailment. A sentence that is mostly grounded but swaps a single token (a
+wrong number, a negation) can still score above threshold and pass; use an NLI
+model where that matters. (The structured layer in :mod:`groundkit.verify` catches
+wrong values exactly; this text layer is the softer, content-overlap check.)
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+
+from .provenance import Provenance
 
 _STOPWORDS = {
     "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "of",
@@ -48,6 +53,11 @@ class SentenceVerdict:
     supported: bool
     score: float
     source_index: int | None  # best-matching source when supported
+
+    @property
+    def provenance(self) -> Provenance:
+        """VERIFIED when supported by the evidence, else UNSUPPORTED."""
+        return Provenance.VERIFIED if self.supported else Provenance.UNSUPPORTED
 
 
 @dataclass(frozen=True)
