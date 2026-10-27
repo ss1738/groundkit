@@ -43,11 +43,13 @@ wording while changing a figure, and sentences that flip what the evidence says,
 which is the failure that scores a perfect 1.000 on overlap. It is not
 paraphrase-level entailment and does not catch an antonym carrying no negation
 cue; drop in an NLI model for that. The structured layer
-is exact and is where the 100% catch rate comes from. groundkit also checks
-grounding, not freshness: it asks whether an answer is supported by the evidence it
-was given, never whether that evidence is still current, and there is no revision or
-staleness hook, so an answer citing a stale chunk perfectly still comes back
-VERIFIED. Keeping the index current stays with the ingestion pipeline. Feedback
+is exact and is where the 100% catch rate comes from. Grounding and freshness are kept
+apart: the checks above ask whether an answer is supported by the evidence it was
+given, never whether that evidence is still current, so an answer citing a stale
+chunk perfectly still comes back VERIFIED. `groundkit.source` answers the second
+question through a read-time revision resolver or a TTL lease, and reports it as a
+separate result rather than folding it into attribution, because the two failures
+need different fixes. Anything unverifiable is UNKNOWN, never current. Feedback
 welcome.
 
 ## First comment (post right after)

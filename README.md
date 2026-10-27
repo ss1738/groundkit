@@ -115,9 +115,10 @@ wrong-value detection on fields you can extract, use the structured layer above.
 
 ## Scope: grounding is not freshness
 
-groundkit answers **"is this answer supported by the evidence it was given?"** It
-does not answer **"is that evidence still current?"** Those are separate claims and
-groundkit only makes the first one.
+groundkit's grounding checks answer **"is this answer supported by the evidence it
+was given?"** They never answer **"is that evidence still current?"** Those are
+separate claims, and the library keeps them separate rather than folding one into
+the other.
 
 Concretely: index a policy saying "refunds within 30 days", answer from it, then
 change the authoritative policy to 14 days while the old chunk stays in your index.
@@ -131,13 +132,45 @@ against the evidence it was given; when the evidence itself is the stale chunk,
 the figures agree. Fresh evidence with a wrong figure is caught; stale evidence
 faithfully quoted is not.
 
-There is **no revision or staleness hook**. `Grounded.source` is a free-text label,
-not a document id, revision hash or fetched-at time, and nothing in the library
-compares one to the live source. Keeping the indexed snapshot current is the
-ingestion pipeline's job. If you need both claims, track revision and fetched-at
-beside each chunk and check them separately, then treat "supported by this snapshot"
-and "snapshot still current" as two results rather than making attribution carry
-both.
+`groundkit.source` checks the second claim, and reports it **separately**:
+
+```python
+from groundkit import SourceDescriptor, check_sources, digest, ground_text, EvidenceReport
+
+src = SourceDescriptor(
+    uri="policy/refunds",
+    revision=digest(chunk),              # or an ETag, or a version id
+    fetched_at="2026-09-01T00:00:00Z",
+    ttl_seconds=86_400,
+)
+
+grounding = ground_text(answer, [chunk])                 # faithful to the snapshot?
+freshness = check_sources([src], resolver=live_revision) # snapshot still current?
+
+EvidenceReport(grounding, freshness).trustworthy         # needs both
+```
+
+`resolver` is `uri -> current revision`, called at read time. When the policy
+changes underneath you, grounding still passes (correctly, the answer does match
+its chunk) and freshness returns `STALE`. Two results, because they need two
+different fixes: a grounding failure means the model misused its evidence, a
+freshness failure means your pipeline served evidence that no longer holds and
+the model may have done nothing wrong.
+
+Freshness comes from a revision compared against the live source, or a lease
+(`fetched_at` + `ttl_seconds`) checked locally with no lookup. A lease is a
+statement that you trust the snapshot for a period, not evidence that it is
+current. Anything unverifiable is `UNKNOWN`, never `CURRENT`, and `is_current` is
+true only for `CURRENT`, so not knowing fails closed. A resolver that raises
+degrades to `UNKNOWN` with the error attached rather than taking the request down.
+
+`FactStore(facts, source=...)` carries a descriptor the same way, so a lookup can
+say which snapshot answered it. That records *which* snapshot, and still says
+nothing about whether it is current; check that with `check_sources`.
+
+What the library will not do is let attribution carry both claims. There is no
+combined "verified and fresh" verdict, because the two failures are not
+interchangeable.
 
 Within a single snapshot both layers catch wrong values:
 `verify_claim(FactStore({"refund_window_days": 14}), "refund_window_days", 30)`
@@ -160,6 +193,15 @@ text through quantity parity.
 - **`negated_tokens(text)`**, **`polarity_conflicts(sentence, sources)`** from
   `groundkit.negation`, likewise for polarity.
 - **`Provenance`**: `VERIFIED` · `CONTRADICTED` · `ADVISORY` · `UNSUPPORTED`.
+- **`SourceDescriptor(uri, revision=None, fetched_at=None, ttl_seconds=None)`**
+  with `.age_seconds()`, and **`digest(text)`** for a content hash.
+- **`check_sources(sources, resolver=None, now=None) -> FreshnessReport`** with
+  `.all_current`, `.stale`, `.expired`, `.unknown`, `.problems`. Single-source
+  form is **`check_source(...)`**, returning a `FreshnessVerdict` with
+  `.freshness`, `.is_current`, `.note`, `.live_revision`.
+- **`Freshness`**: `CURRENT` · `STALE` · `EXPIRED` · `UNKNOWN`.
+- **`EvidenceReport(grounding, freshness)`**: both results, `.trustworthy`
+  requires both.
 
 ## Install
 

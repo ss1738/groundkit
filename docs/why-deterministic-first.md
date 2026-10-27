@@ -83,7 +83,11 @@ Both layers check an answer against the snapshot they were handed, never whether
 snapshot is still current. Replace an authoritative policy and leave the old chunk in
 the index and the old answer still verifies against it, correctly and uselessly.
 "Supported by this evidence" and "this evidence is still current" are two claims, and
-deterministic grounding only settles the first.
+deterministic grounding only settles the first. `groundkit.source` settles the
+second, through a revision compared at read time or a TTL lease, and deliberately
+returns it as its own result. Collapsing them into one verdict would be the same
+mistake as letting the model vouch for itself: one check, two claims, no way to
+tell which failed.
 
 ## Try it
 

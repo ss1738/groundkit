@@ -8,25 +8,45 @@ polarity); it is exact and the model never
 overrules it. Layer 2 --
 whatever an LLM contributes -- is, by construction, only ever tagged ADVISORY.
 Every value carries its :class:`Provenance`, so nothing unverified is ever
-silently presented as truth.
+silently presented as truth. :mod:`groundkit.source` answers the separate
+question of whether the evidence is still current, and reports it as a
+separate result: attribution never carries both claims.
 """
 
 from .facts import FactStore, normalise
 from .negation import negated_tokens, polarity_conflicts
 from .provenance import Grounded, Provenance
 from .quantities import extract_quantities, unsupported_quantities
+from .source import (
+    EvidenceReport,
+    Freshness,
+    FreshnessReport,
+    FreshnessVerdict,
+    SourceDescriptor,
+    check_source,
+    check_sources,
+    digest,
+)
 from .text import GroundingReport, SentenceVerdict, ground_text, support_score
 from .verify import contradictions, ground_record, trusted, verify_claim
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
+    "EvidenceReport",
     "FactStore",
+    "Freshness",
+    "FreshnessReport",
+    "FreshnessVerdict",
     "Grounded",
     "GroundingReport",
     "Provenance",
     "SentenceVerdict",
+    "SourceDescriptor",
     "__version__",
+    "check_source",
+    "check_sources",
     "contradictions",
+    "digest",
     "extract_quantities",
     "ground_record",
     "ground_text",

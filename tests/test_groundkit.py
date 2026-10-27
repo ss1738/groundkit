@@ -1,5 +1,7 @@
 """Tests for groundkit's two grounding layers."""
 
+import pytest
+
 from groundkit import (
     FactStore,
     Provenance,
@@ -10,6 +12,15 @@ from groundkit import (
     verify_claim,
 )
 from groundkit.negation import negated_tokens, polarity_conflicts
+from groundkit.source import (
+    EvidenceReport,
+    Freshness,
+    FreshnessReport,
+    SourceDescriptor,
+    check_source,
+    check_sources,
+    digest,
+)
 
 
 def _store():
@@ -135,15 +146,17 @@ def test_stale_snapshot_still_verifies():
     assert g.value == 14
 
 
-def test_no_freshness_api_is_advertised():
-    """No public name promises revision/staleness handling."""
+def test_freshness_is_a_separate_result_from_grounding():
+    """The hook exists, and it does not change what grounding reports."""
     import groundkit
 
-    names = [n for n in dir(groundkit) if not n.startswith("_")]
-    assert not [
-        n for n in names
-        if any(k in n.lower() for k in ("revision", "stale", "fresh", "expire"))
-    ]
+    assert hasattr(groundkit, "check_sources")
+    assert hasattr(groundkit, "SourceDescriptor")
+    # ground_text still answers only "supported by this evidence".
+    stale_chunk = "Customers may request a refund within 30 days of purchase."
+    report = ground_text(stale_chunk, [stale_chunk])
+    assert report.faithful
+    assert not hasattr(report, "freshness")
 
 
 # --- Quantity parity --------------------------------------------------------
@@ -296,3 +309,121 @@ def test_polarity_benchmark_does_not_regress():
 
     assert all(polarity_conflicts(a, s) for a, s in FLIPPED)
     assert not any(polarity_conflicts(a, s) for a, s in SUPPORTED)
+
+
+# --- Freshness --------------------------------------------------------------
+
+
+_CHUNK = "Customers may request a refund within 30 days of purchase."
+_UPDATED = "Customers may request a refund within 14 days of purchase."
+
+
+def _descriptor(**kw):
+    base = {"uri": "policy/refunds", "revision": digest(_CHUNK),
+            "fetched_at": "2026-09-01T00:00:00Z"}
+    base.update(kw)
+    return SourceDescriptor(**base)
+
+
+def test_stale_snapshot_is_caught_by_the_resolver():
+    """The case the grounding checks cannot see, now reported separately."""
+    live = {"policy/refunds": digest(_UPDATED)}
+    report = check_sources([_descriptor()], resolver=lambda uri: live.get(uri))
+    v = report.verdicts[0]
+    assert v.freshness is Freshness.STALE
+    assert not v.is_current
+    assert not report.all_current
+    assert report.stale == [v]
+    assert v.live_revision == digest(_UPDATED)
+
+    # Meanwhile grounding against that same stale chunk still passes, correctly.
+    assert ground_text(_CHUNK, [_CHUNK]).faithful
+
+
+def test_unchanged_source_is_current():
+    live = {"policy/refunds": digest(_CHUNK)}
+    report = check_sources([_descriptor()], resolver=lambda uri: live.get(uri))
+    assert report.all_current
+    assert report.problems == []
+
+
+def test_unverifiable_is_unknown_never_current():
+    # No resolver supplied.
+    assert check_source(_descriptor()).freshness is Freshness.UNKNOWN
+    # Resolver cannot say.
+    assert check_source(_descriptor(), lambda uri: None).freshness is Freshness.UNKNOWN
+    # Nothing recorded to check at all.
+    bare = SourceDescriptor(uri="policy/refunds")
+    assert check_source(bare, lambda uri: "v1").freshness is Freshness.UNKNOWN
+    # UNKNOWN must never read as current.
+    assert not check_source(bare).is_current
+    assert not FreshnessReport([check_source(bare)]).all_current
+
+
+def test_resolver_failure_degrades_rather_than_raising():
+    def broken(uri):
+        raise TimeoutError("source unreachable")
+
+    v = check_source(_descriptor(), broken)
+    assert v.freshness is Freshness.UNKNOWN
+    assert "TimeoutError" in v.note
+
+
+def test_lease_expiry_is_checked_without_a_resolver():
+    from datetime import datetime, timezone
+
+    d = _descriptor(ttl_seconds=3600)
+    fresh = datetime(2026, 9, 1, 0, 30, tzinfo=timezone.utc)
+    stale = datetime(2026, 9, 2, 0, 0, tzinfo=timezone.utc)
+    assert check_source(d, now=fresh).freshness is Freshness.CURRENT
+    expired = check_source(d, now=stale)
+    assert expired.freshness is Freshness.EXPIRED
+    assert "lease" in expired.note
+    # An elapsed lease wins over a matching revision: do not serve it unchecked.
+    live = {"policy/refunds": digest(_CHUNK)}
+    assert check_source(d, lambda u: live.get(u), now=stale).freshness is Freshness.EXPIRED
+
+
+def test_descriptor_validates_at_construction():
+    with pytest.raises(ValueError):
+        SourceDescriptor(uri="")
+    with pytest.raises(ValueError):
+        SourceDescriptor(uri="u", fetched_at="not-a-timestamp")
+    with pytest.raises(ValueError):
+        SourceDescriptor(uri="u", ttl_seconds=60)            # ttl needs fetched_at
+    with pytest.raises(ValueError):
+        SourceDescriptor(uri="u", fetched_at="2026-09-01T00:00:00Z", ttl_seconds=-1)
+    # Both ISO forms parse, including the 'Z' suffix Python 3.9 rejects natively.
+    assert SourceDescriptor(uri="u", fetched_at="2026-09-01T00:00:00Z").age_seconds()
+    assert SourceDescriptor(uri="u", fetched_at="2026-09-01T00:00:00+00:00")
+
+
+def test_evidence_report_keeps_the_two_results_apart():
+    live = {"policy/refunds": digest(_UPDATED)}
+    grounding = ground_text(_CHUNK, [_CHUNK])
+    freshness = check_sources([_descriptor()], resolver=lambda uri: live.get(uri))
+    report = EvidenceReport(grounding=grounding, freshness=freshness)
+
+    assert grounding.faithful            # faithful to the snapshot it was given
+    assert not freshness.all_current     # and the snapshot has moved on
+    assert not report.trustworthy        # so the answer is not trustworthy
+    # The two failures stay distinguishable, because they need different fixes.
+    assert report.grounding.faithful is True
+    assert report.freshness.stale != []
+
+
+def test_factstore_carries_its_source_without_changing_verdicts():
+    d = _descriptor()
+    store = FactStore({"refund_window_days": 14}, source=d)
+    g = verify_claim(store, "refund_window_days", 14)
+    assert g.provenance is Provenance.VERIFIED
+    assert g.source is d                      # which snapshot answered
+    # An explicit source still wins, and a store without one is unchanged.
+    assert verify_claim(store, "refund_window_days", 14, source="manual").source == "manual"
+    assert verify_claim(FactStore({"a": 1}), "a", 1).source == "authoritative"
+
+
+def test_digest_is_stable_and_content_addressed():
+    assert digest(_CHUNK) == digest(_CHUNK)
+    assert digest(_CHUNK) != digest(_UPDATED)
+    assert digest(_CHUNK).startswith("sha256:")

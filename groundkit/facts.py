@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .source import SourceDescriptor
+
 
 def normalise(value: Any) -> str:
     """Casefold and collapse whitespace for strict value comparison."""
@@ -22,10 +24,19 @@ class FactStore:
 
     Args:
         facts: Initial ground-truth mapping.
+        source: Where these facts came from, so a lookup can say which snapshot
+            it answered from. A store without one verifies exactly as before and
+            cannot tell you whether its contents are still current; see
+            :mod:`groundkit.source`.
     """
 
-    def __init__(self, facts: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        facts: dict[str, Any] | None = None,
+        source: SourceDescriptor | None = None,
+    ) -> None:
         self._facts: dict[str, Any] = dict(facts or {})
+        self.source = source
 
     def has(self, key: str) -> bool:
         return key in self._facts

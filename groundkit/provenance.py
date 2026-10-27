@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from .source import SourceDescriptor
+
 
 class Provenance(str, Enum):
     """Where a value's authority comes from."""
@@ -33,7 +35,7 @@ class Grounded:
 
     value: Any
     provenance: Provenance
-    source: str | None = None
+    source: str | SourceDescriptor | None = None
     note: str | None = None
 
     @property
