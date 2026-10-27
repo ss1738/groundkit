@@ -12,6 +12,7 @@ from groundkit import (
     verify_claim,
 )
 from groundkit.negation import negated_tokens, polarity_conflicts
+from groundkit.quantities import unsupported_quantities
 from groundkit.sentences import split_sentences
 from groundkit.source import (
     EvidenceReport,
@@ -561,12 +562,20 @@ def test_rejections_are_the_reliable_direction():
 
 def test_quantity_abstains_on_comparatives():
     """A figure governed by a comparative is a bound, so presence settles nothing."""
-    # "over 23.5 million" is not refuted by evidence saying 13 million.
-    assert ground_text(
+    # Tested at the quantity layer: these phrasings have low word overlap, so
+    # ground_text rejects them on overlap before quantity parity is consulted.
+    assert not unsupported_quantities(
         "Westlife made over 23.5 million sales.", ["Certified for 13 million."]
+    )
+    assert not unsupported_quantities("A rate of at least 5%.", ["A rate of 7%."])
+    assert not unsupported_quantities(
+        "Up to 50 people may attend.", ["Up to 100 people may attend."]
+    )
+    # And through ground_text where overlap does pass.
+    assert ground_text(
+        "Customers may request a refund within over 30 days of purchase.",
+        ["Customers may request a refund within over 14 days of purchase."],
     ).faithful
-    assert ground_text("A rate of at least 5%.", ["A rate of 7%."]).faithful
-    assert ground_text("Up to 50 people may attend.", ["Up to 100 may attend."]).faithful
 
     # Relational prepositions are not comparatives: two stated limits still
     # contradict each other, which is the case this library started from.
