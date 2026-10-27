@@ -2,9 +2,9 @@
 
 Two layers. Layer 1 checks structured claims against an authoritative source
 (:func:`ground_record`) and free-text answers against retrieved evidence
-(:func:`ground_text`, which checks content-word overlap, that every figure the
-answer asserts appears in the evidence, and that it does not flip the evidence's
-polarity); it is exact and the model never
+(:func:`ground_text`, which screens content-word overlap, figures asserted, and
+polarity; it rejects reliably, but a clean result means only that nothing fired,
+not that the answer is supported); it is exact and the model never
 overrules it. Layer 2 --
 whatever an LLM contributes -- is, by construction, only ever tagged ADVISORY.
 :mod:`groundkit.weaviate` adapts a Weaviate v4 query result into both, without
@@ -34,7 +34,7 @@ from .source import (
 from .text import GroundingReport, SentenceVerdict, ground_text, support_score
 from .verify import contradictions, ground_record, trusted, verify_claim
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = [
     "ABBREVIATIONS",
     "EvidenceReport",

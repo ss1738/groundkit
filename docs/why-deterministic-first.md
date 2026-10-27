@@ -72,9 +72,11 @@ from the evidence, which is the common RAG failure. A second deterministic pass
 requires every figure the sentence asserts to appear in the evidence, so a swapped
 number is caught even though the wording still scores 0.875. A third pass compares
 polarity, so an answer that drops a "not" is caught even at a perfect 1.000
-overlap score. It is still not entailment: an antonym carrying no negation cue,
-"increased" against "decreased", passes, so swap in an NLI model where you need
-that. For catching a wrong value
+overlap score. It is still not entailment, and the asymmetry matters: these
+checks reject reliably but never confirm. An antonym carrying no cue passes, and
+so does a reversed relation, "Acme sued Beta Corp" against "Beta Corp sued Acme",
+at a perfect overlap score. A clean result means nothing fired. Swap in an NLI
+model where you need a positive finding of support. For catching a wrong value
 exactly, the structured layer above is the right tool; for "did the model bolt on a
 whole claim that isn't in the sources", the lexical overlap is cheap, dependency-free,
 and surprisingly effective.

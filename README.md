@@ -5,9 +5,15 @@
 
 **Deterministic-first grounding for LLM output.** A model can *propose*, but it
 can never *assert a fact*. groundkit checks structured claims against an
-authoritative source and free-text answers against retrieved evidence, tags every
-value with its **provenance**, and guarantees nothing unverified is silently
+authoritative source, and screens free-text answers against retrieved evidence.
+Every value carries its **provenance**, so nothing unverified is silently
 presented as truth. Pure Python, zero dependencies.
+
+The two layers differ in what they can promise. The structured layer
+**confirms**: a field either matches the authoritative record or it does not.
+The free-text layer **screens**: its checks reject reliably and a clean result
+means only that nothing fired. Read "These checks reject, they do not verify"
+below before relying on it.
 
 ```python
 from groundkit import FactStore, ground_record, trusted
@@ -114,10 +120,37 @@ passage agrees with the answer's polarity. `benchmarks/bench_polarity.py` scores
 hand-built, so read it as a regression floor rather than evidence of
 generalisation. Pass `check_polarity=False` to disable it.
 
-None of the three checks is entailment. An **antonym carrying no negation cue**
-("increased" against "decreased") still passes, as does anything needing
-paraphrase-level inference, so use an NLI model where that matters. For exact
-wrong-value detection on fields you can extract, use the structured layer above.
+### These checks reject, they do not verify
+
+This is the most important line in the README. When a check fires it is
+reliable. When nothing fires, that is the absence of a detected problem, not a
+finding of support.
+
+Measured against this library, every one of these passes:
+
+| Answer | Evidence says | Score | Verdict |
+|---|---|---|---|
+| Acme sued Beta Corp. | Beta Corp sued Acme. | **1.000** | passes |
+| The claimant owes the insurer 500 pounds. | the insurer owes the claimant | **1.000** | passes |
+| Policy A supersedes Policy B. | Policy B supersedes Policy A. | **1.000** | passes |
+| The fee rose from 14 to 30 pounds. | the fee fell from 30 to 14 | 0.800 | passes |
+| Coverage increased after the review. | coverage decreased | 0.750 | passes |
+
+Identical tokens, identical numbers, no negation cue. Relational and
+argument-order inversion is invisible to all three checks, as are antonyms
+without a cue and anything needing paraphrase-level inference. No list of rules
+will fix that; it needs a model that represents meaning.
+
+So `report.faithful` means **"none of my cheap checks caught anything"**. Do not
+wire it to auto-accept an answer. `redacted()` removes what was flagged, which is
+not the same as returning text that is safe to show: the reversed claims above
+survive redaction intact. The reliable use is the other direction, routing
+flagged answers to review or rejection. Those cases are pinned in
+`tests/test_groundkit.py` so the claim stays measured.
+
+For a positive finding of support, use an NLI model, or the structured layer
+above, which is the only part of groundkit that confirms rather than fails to
+object.
 
 ## Scope: grounding is not freshness
 

@@ -1,26 +1,37 @@
-"""Grounding free-text answers against retrieved evidence (RAG faithfulness).
+"""Checking free-text answers against retrieved evidence.
 
-Splits an answer into sentences and checks each one against the provided source
-passages: a sentence is supported when enough of its content words appear in some
-source. Unsupported sentences are flagged, never trusted.
+**These checks reject, they do not verify.** The distinction is the most
+important thing on this page. When a check fires, it is reliable: the figure
+really is absent, the polarity really is reversed. When nothing fires, that is
+the absence of a detected problem and not a finding of support. Treat a clean
+report as "none of my cheap checks caught anything", never as "this answer is
+grounded", and never wire it to auto-accept an answer.
 
-Two deterministic checks, no model and no dependency. Content-word overlap flags
-sentences whose substance is largely absent from the evidence, the common RAG
-failure. Quantity parity (:mod:`groundkit.quantities`) then requires every figure
-the sentence asserts to appear in the evidence, which closes the hole overlap
-alone leaves: "within 30 days" against a source saying "within 14 days" shares
-every word but the digits and scores 0.875.
+Three deterministic checks run per sentence, no model and no dependency.
+Content-word overlap flags sentences whose substance is largely absent from the
+evidence, the common RAG failure. Quantity parity
+(:mod:`groundkit.quantities`) requires every figure the sentence asserts to
+appear in the evidence, closing the hole overlap leaves: "within 30 days"
+against a source saying "within 14 days" shares every word but the digits and
+scores 0.875. Polarity parity (:mod:`groundkit.negation`) catches a sentence
+that flips what the evidence says, which is the highest-scoring failure of all,
+since an answer that drops a "not" matches every word the source contains and
+scores 1.000.
 
-A third check, polarity parity (:mod:`groundkit.negation`), catches a sentence
-that flips what the evidence says. That is the highest-scoring failure of all:
-an answer that drops a "not" matches every word the source contains and scores
-1.000.
+What gets through, measured against this library:
 
-None of the three is entailment. An antonym carrying no negation cue
-("increased" against "decreased") still passes, as does anything needing
-paraphrase-level inference, so use an NLI model where that matters. The
-structured layer in :mod:`groundkit.verify` remains the exact check for values you
-can extract into fields.
+* **relational and argument-order inversion.** "Acme sued Beta Corp" against a
+  source reading "Beta Corp sued Acme" scores **1.000** and passes. Identical
+  tokens, identical numbers, no negation cue. So do "the claimant owes the
+  insurer" reversed, and "Policy A supersedes Policy B" reversed;
+* **antonyms carrying no negation cue**, "increased" against "decreased";
+* anything needing paraphrase-level inference.
+
+None of the three is entailment, and no list of rules will make them so. Use an
+NLI model where a positive finding of support is required. The structured layer
+in :mod:`groundkit.verify` is the exact check for values you can extract into
+fields, and is the only part of groundkit that confirms rather than fails to
+object.
 """
 
 from __future__ import annotations
@@ -53,7 +64,12 @@ class SentenceVerdict:
 
     @property
     def provenance(self) -> Provenance:
-        """VERIFIED when supported by the evidence, else UNSUPPORTED."""
+        """UNSUPPORTED when a check fired, else VERIFIED.
+
+        VERIFIED here means "no check objected", which is weaker than the
+        :mod:`groundkit.verify` sense of the same tag, where a value was
+        confirmed against an authoritative record.
+        """
         return Provenance.VERIFIED if self.supported else Provenance.UNSUPPORTED
 
 
@@ -65,6 +81,7 @@ class GroundingReport:
 
     @property
     def supported_ratio(self) -> float:
+        """Fraction of sentences nothing flagged. An upper bound on faithfulness."""
         if not self.sentences:
             return 1.0
         return sum(v.supported for v in self.sentences) / len(self.sentences)
@@ -75,7 +92,12 @@ class GroundingReport:
 
     @property
     def faithful(self) -> bool:
-        """True iff every sentence is backed by the evidence."""
+        """True when no check flagged any sentence.
+
+        This is the absence of a detected problem, not a positive finding that
+        the answer is supported. A reversed claim with identical wording passes
+        it. Use it to route answers for review, not to accept them.
+        """
         return not self.unsupported
 
     def flagged(self, mark: str = " [UNSUPPORTED]") -> str:
@@ -85,7 +107,13 @@ class GroundingReport:
         )
 
     def redacted(self) -> str:
-        """The answer with unsupported sentences removed."""
+        """The answer with flagged sentences removed.
+
+        What remains is the text nothing objected to, which is **not** the same
+        as the text that is safe to show. Sentences these checks cannot see
+        through, a reversed relation or a swapped antonym, survive redaction
+        intact. Do not present the result as verified content.
+        """
         return " ".join(v.sentence for v in self.sentences if v.supported)
 
 

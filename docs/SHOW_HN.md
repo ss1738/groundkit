@@ -40,9 +40,12 @@ Honest scope: the text check is three deterministic passes, content-word overlap
 plus quantity parity plus polarity parity. It catches sentences that add
 unsupported content (the common RAG failure), sentences that reuse the evidence's
 wording while changing a figure, and sentences that flip what the evidence says,
-which is the failure that scores a perfect 1.000 on overlap. It is not
-paraphrase-level entailment and does not catch an antonym carrying no negation
-cue; drop in an NLI model for that. The structured layer
+which is the failure that scores a perfect 1.000 on overlap. The checks reject rather than verify: when one
+fires it is reliable, but a clean result means only that nothing fired. Measured
+against the library, "Acme sued Beta Corp" against a source reading "Beta Corp
+sued Acme" scores 1.000 and passes, as do antonyms carrying no cue. Relational
+inversion and paraphrase-level entailment need a model; drop in NLI for that, and
+do not wire the text layer to auto-accept. The structured layer
 is exact and is where the 100% catch rate comes from. Grounding and freshness are kept
 apart: the checks above ask whether an answer is supported by the evidence it was
 given, never whether that evidence is still current, so an answer citing a stale

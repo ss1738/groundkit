@@ -491,3 +491,59 @@ def test_empty_and_unterminated_text():
 def test_unknown_abbreviation_still_splits():
     """Unknown abbreviations fall back to the old behaviour, never worse."""
     assert len(split_sentences("Filed by Xyz. The claim closed.")) == 2
+
+
+# --- What these checks cannot see -------------------------------------------
+
+
+RELATIONAL_INVERSIONS = [
+    ("Acme sued Beta Corp.", ["Beta Corp sued Acme."]),
+    ("The claimant owes the insurer 500 pounds.",
+     ["The insurer owes the claimant 500 pounds."]),
+    ("Policy A supersedes Policy B.", ["Policy B supersedes Policy A."]),
+    ("The fee rose from 14 to 30 pounds.", ["The fee fell from 30 to 14 pounds."]),
+    ("Coverage increased after the review.", ["Coverage decreased after the review."]),
+    ("The deadline is before the hearing.", ["The deadline is after the hearing."]),
+]
+
+
+def test_relational_inversions_pass_and_that_is_documented():
+    """Pins the blind spot the README and module docstring describe.
+
+    These answers reverse what the evidence says and every check passes them,
+    three at a perfect overlap score. Identical tokens, identical numbers, no
+    negation cue. This is why a clean report means "nothing fired", not
+    "supported", and why the library must not be wired to auto-accept.
+
+    If this test ever starts failing, a check has improved and the
+    documentation claiming these get through must be corrected in the same
+    commit.
+    """
+    passed = [a for a, s in RELATIONAL_INVERSIONS if ground_text(a, s).faithful]
+    assert len(passed) == len(RELATIONAL_INVERSIONS)
+
+    perfect = [
+        a for a, s in RELATIONAL_INVERSIONS
+        if ground_text(a, s).sentences[0].score == 1.0
+    ]
+    assert len(perfect) >= 3
+
+
+def test_redaction_keeps_an_inverted_claim_intact():
+    """redacted() removes what was flagged, which is not the same as safe."""
+    answer = "Acme sued Beta Corp."
+    report = ground_text(answer, ["Beta Corp sued Acme."])
+    assert report.redacted() == answer     # survives redaction, still reversed
+
+
+def test_rejections_are_the_reliable_direction():
+    """The asymmetry stated in the docs: flags are trustworthy, passes are not."""
+    # Fires, and is right to.
+    assert not ground_text(
+        "Refunds within 30 days.", ["Refunds within 14 days."]
+    ).faithful
+    assert not ground_text(
+        "Refunds are available.", ["Refunds are not available."]
+    ).faithful
+    # Does not fire, and is wrong not to.
+    assert ground_text("Acme sued Beta Corp.", ["Beta Corp sued Acme."]).faithful

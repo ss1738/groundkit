@@ -70,6 +70,10 @@ def main() -> None:
           f"(false negatives {fn})")
     print("\nSmall hand-built set. A floor against regression, not evidence of")
     print("generalisation: no public negation-in-RAG benchmark is used here.")
+    print("Note what these numbers do and do not say. Precision is the quality of")
+    print("the rejections, which is the direction this check is good at. Recall is")
+    print("measured over failures the author thought to write down, so it is not")
+    print("the fraction of real-world polarity errors caught.")
 
 
 if __name__ == "__main__":
