@@ -11,8 +11,14 @@ the sentence asserts to appear in the evidence, which closes the hole overlap
 alone leaves: "within 30 days" against a source saying "within 14 days" shares
 every word but the digits and scores 0.875.
 
-Neither check is entailment. A negation or an antonym swapped into an otherwise
-grounded sentence still passes, so use an NLI model where that matters. The
+A third check, polarity parity (:mod:`groundkit.negation`), catches a sentence
+that flips what the evidence says. That is the highest-scoring failure of all:
+an answer that drops a "not" matches every word the source contains and scores
+1.000.
+
+None of the three is entailment. An antonym carrying no negation cue
+("increased" against "decreased") still passes, as does anything needing
+paraphrase-level inference, so use an NLI model where that matters. The
 structured layer in :mod:`groundkit.verify` remains the exact check for values you
 can extract into fields.
 """
@@ -22,22 +28,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .negation import polarity_conflicts
 from .provenance import Provenance
 from .quantities import unsupported_quantities
-
-_STOPWORDS = {
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "of",
-    "in", "on", "at", "to", "for", "and", "or", "but", "with", "as", "by",
-    "it", "its", "this", "that", "these", "those", "from", "has", "have", "had",
-    "which", "who", "whom", "their", "there", "then", "than", "into", "about",
-}
-
-
-def _content_tokens(text: str) -> list[str]:
-    # \w is Unicode-aware, so non-Latin scripts (CJK, Cyrillic, accented Latin)
-    # produce real tokens instead of vanishing and being vacuously "supported".
-    tokens = re.findall(r"\w+", text.lower())
-    return [t for t in tokens if len(t) > 1 and t not in _STOPWORDS]
+from .tokens import content_tokens as _content_tokens
 
 
 def split_sentences(text: str) -> list[str]:
@@ -107,13 +101,16 @@ def ground_text(
     *,
     threshold: float = 0.6,
     check_quantities: bool = True,
+    check_polarity: bool = True,
 ) -> GroundingReport:
     """Check each sentence of ``answer`` against ``sources``.
 
-    Two checks, both deterministic. Content-word overlap catches a sentence that
+    Three checks, all deterministic. Content-word overlap catches a sentence that
     introduces material the evidence does not contain. Quantity parity catches a
-    sentence that reuses the evidence's wording but changes a figure, which
-    overlap alone scores as supported.
+    sentence that reuses the evidence's wording but changes a figure. Polarity
+    parity catches a sentence that flips what the evidence says, which overlap
+    scores highest of all: an answer dropping a "not" matches every word the
+    source has.
 
     Args:
         answer: The model's free-text answer.
@@ -124,6 +121,9 @@ def ground_text(
             currency amount the sentence asserts to appear somewhere in
             ``sources``. See :mod:`groundkit.quantities` for what is and is not
             canonicalised.
+        check_polarity: Flag a sentence that negates what the evidence affirms,
+            or affirms what it negates. See :mod:`groundkit.negation` for the
+            cue-and-scope rules and their limits.
     """
     verdicts: list[SentenceVerdict] = []
     for sentence in split_sentences(answer):
@@ -141,6 +141,15 @@ def ground_text(
                 reason = "quantity absent from the evidence: " + ", ".join(
                     sorted(f"{v} {u}".strip() for v, u in missing)
                 )
+        if supported and check_polarity:
+            flipped = polarity_conflicts(sentence, sources)
+            if flipped:
+                supported = False
+                named = sorted(flipped)
+                shown = ", ".join(named[:3])
+                if len(named) > 3:
+                    shown += f", +{len(named) - 3} more"
+                reason = f"polarity differs from the evidence: {shown}"
         verdicts.append(
             SentenceVerdict(
                 sentence=sentence,

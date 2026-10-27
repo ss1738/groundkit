@@ -9,6 +9,7 @@ from groundkit import (
     trusted,
     verify_claim,
 )
+from groundkit.negation import negated_tokens, polarity_conflicts
 
 
 def _store():
@@ -220,3 +221,78 @@ def test_verdict_reason_is_set_for_both_failure_modes():
     assert "quantity" in r.sentences[0].reason
     assert "content words" in r.sentences[1].reason
     assert ground_text("The fee is 7%.", ["The fee is 7%."]).sentences[0].reason is None
+
+
+# --- Polarity parity --------------------------------------------------------
+
+
+def test_polarity_flip_is_caught_at_a_perfect_overlap_score():
+    """The worst overlap failure: dropping a "not" scores 1.0."""
+    src = ["Refunds are not available after 14 days."]
+    v = ground_text("Refunds are available after 14 days.", src).sentences[0]
+    assert v.score == 1.0            # every answer word is in the evidence
+    assert not v.supported
+    assert v.provenance is Provenance.UNSUPPORTED
+    assert "polarity" in v.reason
+
+
+def test_polarity_catches_both_directions():
+    affirmed = ["The drug is approved for children."]
+    negated = ["The drug is not approved for children."]
+    assert not ground_text("The drug is not approved for children.", affirmed).faithful
+    assert not ground_text("The drug is approved for children.", negated).faithful
+    # Agreeing polarity is left alone, in either direction.
+    assert ground_text("The drug is approved for children.", affirmed).faithful
+    assert ground_text("The drug is not approved for children.", negated).faithful
+
+
+def test_polarity_handles_contractions_without_tripping_on_can():
+    assert not ground_text(
+        "The policy doesn't cover flood damage.", ["The policy covers flood damage."]
+    ).faithful
+    # A bare "can" must not read as "can't".
+    assert ground_text(
+        "You can request a refund within 30 days.",
+        ["You can request a refund within 30 days."],
+    ).faithful
+
+
+def test_polarity_post_cue_scopes_backwards():
+    assert not ground_text("The claim was denied.", ["The claim was approved."]).faithful
+    assert ground_text("The claim was denied.", ["The claim was denied."]).faithful
+
+
+def test_polarity_skips_pseudo_cues_and_respects_terminators():
+    assert negated_tokens("Not only does it cover flood, it covers fire.") == set()
+    assert "fire" not in negated_tokens("It does not cover flood but it covers fire.")
+    assert ground_text(
+        "The policy covers flood but not fire.",
+        ["The policy covers flood but not fire."],
+    ).faithful
+
+
+def test_polarity_one_agreeing_source_clears_the_conflict():
+    sources = [
+        "Refunds are not available before 14 days.",
+        "Refunds are available after 14 days.",
+    ]
+    assert ground_text("Refunds are available after 14 days.", sources).faithful
+
+
+def test_polarity_check_can_be_disabled():
+    src = ["Refunds are not available after 14 days."]
+    answer = "Refunds are available after 14 days."
+    assert not ground_text(answer, src).faithful
+    assert ground_text(answer, src, check_polarity=False).faithful
+
+
+def test_polarity_benchmark_does_not_regress():
+    """The labelled set in benchmarks/bench_polarity.py must stay clean."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "benchmarks"))
+    from bench_polarity import FLIPPED, SUPPORTED
+
+    assert all(polarity_conflicts(a, s) for a, s in FLIPPED)
+    assert not any(polarity_conflicts(a, s) for a, s in SUPPORTED)

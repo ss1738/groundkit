@@ -90,8 +90,27 @@ numbers, durations, percentages, currency amounts and doses, converting only
 where the conversion is exact (`two weeks` and `14 days` are the same quantity;
 a month is never 30 days). Pass `check_quantities=False` to disable it.
 
-Neither check is entailment. A **negation or antonym** swapped into an otherwise
-grounded sentence still passes, so use an NLI model where that matters. For exact
+A third check, polarity parity, catches the highest-scoring failure of all:
+
+```python
+ground_text("Refunds are available after 14 days.",
+            ["Refunds are not available after 14 days."])
+# supported: False, score: 1.000, reason: "polarity differs from the evidence: ..."
+```
+
+That scores a **perfect 1.000** on overlap, because every word of the answer is in
+the evidence. The evidence just has one more word, and it reverses the claim. The
+check is NegEx-style cue and scope detection: it recognises pseudo-cues ("not
+only", "no doubt"), stops at clause-turning conjunctions, reads contractions so
+`doesn't` is a cue while a plain `can` is not, and clears a token if any one
+passage agrees with the answer's polarity. `benchmarks/bench_polarity.py` scores
+**precision 1.000, recall 1.000** on a 27-case labelled set. That set is small and
+hand-built, so read it as a regression floor rather than evidence of
+generalisation. Pass `check_polarity=False` to disable it.
+
+None of the three checks is entailment. An **antonym carrying no negation cue**
+("increased" against "decreased") still passes, as does anything needing
+paraphrase-level inference, so use an NLI model where that matters. For exact
 wrong-value detection on fields you can extract, use the structured layer above.
 
 ## Scope: grounding is not freshness
@@ -131,13 +150,15 @@ text through quantity parity.
   case-normalised comparison.
 - **`ground_record(store, record) -> {key: Grounded}`**, **`verify_claim(...)`**
 - **`trusted(grounded)`**: VERIFIED values only. **`contradictions(grounded)`**.
-- **`ground_text(answer, sources, threshold=0.6, check_quantities=True) ->
-  GroundingReport`** with `.faithful`, `.supported_ratio`, `.unsupported`,
+- **`ground_text(answer, sources, threshold=0.6, check_quantities=True,
+  check_polarity=True) -> GroundingReport`** with `.faithful`, `.supported_ratio`, `.unsupported`,
   `.flagged()`, `.redacted()`. Each `.sentences[i]` is a `SentenceVerdict`
   carrying `.supported`, `.score`, `.reason` and `.provenance`
   (`VERIFIED` / `UNSUPPORTED`).
 - **`extract_quantities(text)`**, **`unsupported_quantities(sentence, sources)`**
   from `groundkit.quantities`, if you want the figures directly.
+- **`negated_tokens(text)`**, **`polarity_conflicts(sentence, sources)`** from
+  `groundkit.negation`, likewise for polarity.
 - **`Provenance`**: `VERIFIED` · `CONTRADICTED` · `ADVISORY` · `UNSUPPORTED`.
 
 ## Install
