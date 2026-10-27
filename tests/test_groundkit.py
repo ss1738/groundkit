@@ -115,10 +115,14 @@ def test_stale_snapshot_still_verifies():
     assert report.sentences[0].score == 1.0
     assert report.sentences[0].provenance is Provenance.VERIFIED
 
-    # Same answer against the *current* policy: a single swapped number still
-    # clears the lexical threshold, so the text layer cannot catch it either.
+    # Against the *current* policy the quantity check does catch it, even though
+    # the lexical score (0.875) still clears the threshold. Freshness is the gap;
+    # a swapped number inside a current snapshot is not.
     current = "Customers may request a refund within 14 days of purchase."
-    assert ground_text(answer, [current]).sentences[0].supported
+    caught = ground_text(answer, [current]).sentences[0]
+    assert caught.score >= 0.6
+    assert not caught.supported
+    assert "quantity" in caught.reason
 
     # A store loaded from stale data is equally unaware it is stale.
     assert verify_claim(FactStore({"refund_window_days": 30}),
@@ -139,3 +143,80 @@ def test_no_freshness_api_is_advertised():
         n for n in names
         if any(k in n.lower() for k in ("revision", "stale", "fresh", "expire"))
     ]
+
+
+# --- Quantity parity --------------------------------------------------------
+
+
+def test_quantity_swap_is_caught_despite_high_overlap():
+    """The failure content-word overlap cannot see: same words, wrong figure."""
+    src = ["Customers may request a refund within 14 days of purchase."]
+    report = ground_text("Customers may request a refund within 30 days of purchase.", src)
+    v = report.sentences[0]
+    assert v.score >= 0.6           # overlap alone would have passed it
+    assert not v.supported
+    assert v.provenance is Provenance.UNSUPPORTED
+    assert "30 day" in v.reason
+
+
+def test_exact_duration_conversions_are_equivalent():
+    """Converting week -> days stops the check false-flagging equivalent wording.
+
+    The quantity check only ever adds strictness; it cannot rescue a sentence
+    whose content words already miss the evidence, so these use phrasings with
+    enough overlap to reach the quantity stage.
+    """
+    base = "Customers may request a refund within {} of purchase."
+    assert ground_text(base.format("two weeks"), [base.format("14 days")]).faithful
+    assert ground_text(
+        base.format("14 days"), [base.format("a two week period")]
+    ).faithful
+    # A month is not a fixed number of days, so it is never converted to one.
+    bad = ground_text(base.format("30 days"), [base.format("one month")])
+    assert not bad.faithful
+    assert "30 day" in bad.sentences[0].reason
+
+
+def test_quantity_check_only_adds_strictness():
+    """A sentence failing on overlap is not rescued by matching quantities."""
+    v = ground_text("You have two weeks.", ["You have 14 days."]).sentences[0]
+    assert not v.supported
+    assert v.reason == "content words absent from the evidence"
+
+
+def test_quantity_check_covers_money_percent_and_dose():
+    assert not ground_text("The rate is 5%.", ["The rate is 7%."]).faithful
+    assert ground_text("The rate is 5%.", ["The rate is 5 percent."]).faithful
+    assert not ground_text("A fee of £1,250.", ["A fee of £1,500."]).faithful
+    assert not ground_text("Take 500 mg daily.", ["Take 250 mg daily."]).faithful
+
+
+def test_quantity_check_does_not_false_flag():
+    sources = [
+        "The Eiffel Tower was completed in 1889.",
+        "It stands 330 m tall in Paris.",
+    ]
+    # Figures present across the evidence set, not just the best-matching passage.
+    assert ground_text("The Eiffel Tower was completed in 1889.", sources).faithful
+    assert ground_text("It stands 330 m tall.", sources).faithful
+    # A bare number matches the same value carrying a unit in the source.
+    assert ground_text("The window is 14.", ["The window is 14 days."]).faithful
+    # Sentences with no quantities are unaffected.
+    assert ground_text("It stands tall in Paris.", sources).faithful
+
+
+def test_quantity_check_can_be_disabled():
+    src = ["Customers may request a refund within 14 days of purchase."]
+    answer = "Customers may request a refund within 30 days of purchase."
+    assert not ground_text(answer, src).faithful
+    assert ground_text(answer, src, check_quantities=False).faithful
+
+
+def test_verdict_reason_is_set_for_both_failure_modes():
+    r = ground_text(
+        "The fee is 5%. Giraffes outnumber lampposts in Oslo.",
+        ["The fee is 7%."],
+    )
+    assert "quantity" in r.sentences[0].reason
+    assert "content words" in r.sentences[1].reason
+    assert ground_text("The fee is 7%.", ["The fee is 7%."]).sentences[0].reason is None

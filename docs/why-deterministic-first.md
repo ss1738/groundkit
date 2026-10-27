@@ -68,9 +68,11 @@ report.redacted()     # "The Eiffel Tower was completed in 1889."
 ```
 
 The check is lexical: it flags sentences whose content words are largely absent
-from the evidence, which is the common RAG failure. It won't catch a single swapped
-token (a wrong number, a negation) in an otherwise-grounded sentence, and it isn't
-entailment, so swap in an NLI model where you need that. For catching a wrong value
+from the evidence, which is the common RAG failure. A second deterministic pass
+requires every figure the sentence asserts to appear in the evidence, so a swapped
+number is caught even though the wording still scores 0.875. It is still not
+entailment: a negation or antonym in an otherwise grounded sentence passes, so
+swap in an NLI model where you need that. For catching a wrong value
 exactly, the structured layer above is the right tool; for "did the model bolt on a
 whole claim that isn't in the sources", the lexical overlap is cheap, dependency-free,
 and surprisingly effective.

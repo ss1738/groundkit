@@ -4,12 +4,17 @@ Splits an answer into sentences and checks each one against the provided source
 passages: a sentence is supported when enough of its content words appear in some
 source. Unsupported sentences are flagged, never trusted.
 
-This check is deliberately lexical and dependency-free: it flags sentences whose
-content words are largely absent from the evidence (the common RAG failure). It is
-not entailment. A sentence that is mostly grounded but swaps a single token (a
-wrong number, a negation) can still score above threshold and pass; use an NLI
-model where that matters. (The structured layer in :mod:`groundkit.verify` catches
-wrong values exactly; this text layer is the softer, content-overlap check.)
+Two deterministic checks, no model and no dependency. Content-word overlap flags
+sentences whose substance is largely absent from the evidence, the common RAG
+failure. Quantity parity (:mod:`groundkit.quantities`) then requires every figure
+the sentence asserts to appear in the evidence, which closes the hole overlap
+alone leaves: "within 30 days" against a source saying "within 14 days" shares
+every word but the digits and scores 0.875.
+
+Neither check is entailment. A negation or an antonym swapped into an otherwise
+grounded sentence still passes, so use an NLI model where that matters. The
+structured layer in :mod:`groundkit.verify` remains the exact check for values you
+can extract into fields.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ import re
 from dataclasses import dataclass
 
 from .provenance import Provenance
+from .quantities import unsupported_quantities
 
 _STOPWORDS = {
     "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "of",
@@ -55,6 +61,7 @@ class SentenceVerdict:
     supported: bool
     score: float
     source_index: int | None  # best-matching source when supported
+    reason: str | None = None  # why it failed, when it did
 
     @property
     def provenance(self) -> Provenance:
@@ -95,15 +102,28 @@ class GroundingReport:
 
 
 def ground_text(
-    answer: str, sources: list[str], *, threshold: float = 0.6
+    answer: str,
+    sources: list[str],
+    *,
+    threshold: float = 0.6,
+    check_quantities: bool = True,
 ) -> GroundingReport:
     """Check each sentence of ``answer`` against ``sources``.
+
+    Two checks, both deterministic. Content-word overlap catches a sentence that
+    introduces material the evidence does not contain. Quantity parity catches a
+    sentence that reuses the evidence's wording but changes a figure, which
+    overlap alone scores as supported.
 
     Args:
         answer: The model's free-text answer.
         sources: The retrieved passages it was supposed to rely on.
         threshold: Minimum content-word overlap for a sentence to count as
             supported.
+        check_quantities: Require every number, duration, percentage and
+            currency amount the sentence asserts to appear somewhere in
+            ``sources``. See :mod:`groundkit.quantities` for what is and is not
+            canonicalised.
     """
     verdicts: list[SentenceVerdict] = []
     for sentence in split_sentences(answer):
@@ -113,12 +133,21 @@ def ground_text(
             if score > best_score:
                 best_score, best_index = score, i
         supported = best_score >= threshold
+        reason = None if supported else "content words absent from the evidence"
+        if supported and check_quantities:
+            missing = unsupported_quantities(sentence, sources)
+            if missing:
+                supported = False
+                reason = "quantity absent from the evidence: " + ", ".join(
+                    sorted(f"{v} {u}".strip() for v, u in missing)
+                )
         verdicts.append(
             SentenceVerdict(
                 sentence=sentence,
                 supported=supported,
                 score=round(best_score, 3),
                 source_index=best_index if supported else None,
+                reason=reason,
             )
         )
     return GroundingReport(verdicts)

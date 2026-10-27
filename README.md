@@ -74,11 +74,25 @@ report.redacted()          # "The Eiffel Tower was completed in 1889."
 report.flagged()           # "... 1889. It is the most visited monument on Earth. [UNSUPPORTED]"
 ```
 
-The support check is lexical and dependency-free: it flags sentences whose content
-words are largely absent from the evidence (the common RAG failure). It is not
-entailment, so a mostly-grounded sentence that swaps a single token (a wrong number,
-a negation) can still pass; use an NLI model where that matters. For exact
-wrong-value detection, use the structured layer above.
+Two deterministic checks run, both dependency-free. Content-word overlap flags
+sentences whose substance is absent from the evidence (the common RAG failure).
+Quantity parity then requires every figure the sentence asserts to appear in the
+evidence:
+
+```python
+ground_text("Refunds are issued within 30 days.",
+            ["Refunds are issued within 14 days."])
+# supported: False, score: 0.875, reason: "quantity absent from the evidence: 30 day"
+```
+
+Overlap alone scores that 0.875 and passes it. The quantity check catches wrong
+numbers, durations, percentages, currency amounts and doses, converting only
+where the conversion is exact (`two weeks` and `14 days` are the same quantity;
+a month is never 30 days). Pass `check_quantities=False` to disable it.
+
+Neither check is entailment. A **negation or antonym** swapped into an otherwise
+grounded sentence still passes, so use an NLI model where that matters. For exact
+wrong-value detection on fields you can extract, use the structured layer above.
 
 ## Scope: grounding is not freshness
 
@@ -93,6 +107,11 @@ matches its retrieved source perfectly and is wrong about current policy. The sa
 holds for `FactStore`: a store loaded from stale data returns `VERIFIED`, because
 nothing records when it was loaded.
 
+Note the quantity check does not help here, and cannot. It compares the answer
+against the evidence it was given; when the evidence itself is the stale chunk,
+the figures agree. Fresh evidence with a wrong figure is caught; stale evidence
+faithfully quoted is not.
+
 There is **no revision or staleness hook**. `Grounded.source` is a free-text label,
 not a document id, revision hash or fetched-at time, and nothing in the library
 compares one to the live source. Keeping the indexed snapshot current is the
@@ -101,9 +120,10 @@ beside each chunk and check them separately, then treat "supported by this snaps
 and "snapshot still current" as two results rather than making attribution carry
 both.
 
-Within a single snapshot, the structured layer does catch wrong values exactly:
+Within a single snapshot both layers catch wrong values:
 `verify_claim(FactStore({"refund_window_days": 14}), "refund_window_days", 30)`
-returns `CONTRADICTED` and keeps 14.
+returns `CONTRADICTED` and keeps 14, and `ground_text` flags the same swap in free
+text through quantity parity.
 
 ## API
 
@@ -111,10 +131,13 @@ returns `CONTRADICTED` and keeps 14.
   case-normalised comparison.
 - **`ground_record(store, record) -> {key: Grounded}`**, **`verify_claim(...)`**
 - **`trusted(grounded)`**: VERIFIED values only. **`contradictions(grounded)`**.
-- **`ground_text(answer, sources, threshold=0.6) -> GroundingReport`** with
-  `.faithful`, `.supported_ratio`, `.unsupported`, `.flagged()`, `.redacted()`.
-  Each `.sentences[i]` is a `SentenceVerdict` carrying `.supported` and
-  `.provenance` (`VERIFIED` / `UNSUPPORTED`).
+- **`ground_text(answer, sources, threshold=0.6, check_quantities=True) ->
+  GroundingReport`** with `.faithful`, `.supported_ratio`, `.unsupported`,
+  `.flagged()`, `.redacted()`. Each `.sentences[i]` is a `SentenceVerdict`
+  carrying `.supported`, `.score`, `.reason` and `.provenance`
+  (`VERIFIED` / `UNSUPPORTED`).
+- **`extract_quantities(text)`**, **`unsupported_quantities(sentence, sources)`**
+  from `groundkit.quantities`, if you want the figures directly.
 - **`Provenance`**: `VERIFIED` · `CONTRADICTED` · `ADVISORY` · `UNSUPPORTED`.
 
 ## Install

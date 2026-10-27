@@ -36,9 +36,11 @@ that introduces content the sources don't support, and can redact it.
 
 Repo, tests, benchmark: https://github.com/ss1738/groundkit
 
-Honest scope: the text check is lexical (content-word overlap), it catches
-sentences that add unsupported content, the common RAG failure, but not
-paraphrase-level entailment; drop in an NLI model for that. The structured layer
+Honest scope: the text check is two deterministic passes, content-word overlap
+plus quantity parity. It catches sentences that add unsupported content, the common
+RAG failure, and sentences that reuse the evidence's wording while changing a
+figure. It is not paraphrase-level entailment and does not catch a swapped
+negation or antonym; drop in an NLI model for that. The structured layer
 is exact and is where the 100% catch rate comes from. groundkit also checks
 grounding, not freshness: it asks whether an answer is supported by the evidence it
 was given, never whether that evidence is still current, and there is no revision or
