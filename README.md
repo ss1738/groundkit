@@ -74,7 +74,13 @@ report.redacted()          # "The Eiffel Tower was completed in 1889."
 report.flagged()           # "... 1889. It is the most visited monument on Earth. [UNSUPPORTED]"
 ```
 
-Two deterministic checks run, both dependency-free. Content-word overlap flags
+Sentences are split with an abbreviation-aware splitter, because every verdict
+below is computed per sentence. Cutting "per Art. 13, cover flood damage" in half
+strands the claim from its negation, and `redacted()` then returns a fragment that
+inverts the answer. `ABBREVIATIONS` is a short English list you can extend;
+unknown abbreviations split as before, so adding to it only ever helps.
+
+Two deterministic checks run on each sentence, both dependency-free. Content-word overlap flags
 sentences whose substance is absent from the evidence (the common RAG failure).
 Quantity parity then requires every figure the sentence asserts to appear in the
 evidence:
@@ -193,6 +199,8 @@ text through quantity parity.
 - **`negated_tokens(text)`**, **`polarity_conflicts(sentence, sources)`** from
   `groundkit.negation`, likewise for polarity.
 - **`Provenance`**: `VERIFIED` · `CONTRADICTED` · `ADVISORY` · `UNSUPPORTED`.
+- **`split_sentences(text)`** and the `ABBREVIATIONS` set from
+  `groundkit.sentences`, if you need the boundaries or want to extend the list.
 - **`SourceDescriptor(uri, revision=None, fetched_at=None, ttl_seconds=None)`**
   with `.age_seconds()`, and **`digest(text)`** for a content hash.
 - **`check_sources(sources, resolver=None, now=None) -> FreshnessReport`** with

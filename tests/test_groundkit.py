@@ -12,6 +12,7 @@ from groundkit import (
     verify_claim,
 )
 from groundkit.negation import negated_tokens, polarity_conflicts
+from groundkit.sentences import split_sentences
 from groundkit.source import (
     EvidenceReport,
     Freshness,
@@ -427,3 +428,66 @@ def test_digest_is_stable_and_content_addressed():
     assert digest(_CHUNK) == digest(_CHUNK)
     assert digest(_CHUNK) != digest(_UPDATED)
     assert digest(_CHUNK).startswith("sha256:")
+
+
+# --- Sentence boundaries ----------------------------------------------------
+
+
+SPLIT_CASES = [
+    ("Dr. Smith approved the claim. The fee is 1500 pounds.", 2),
+    ("The policy covers e.g. flood and fire. It excludes war.", 2),
+    ("Refunds take approx. 14 days. No exceptions apply.", 2),
+    ("See Art. 13 of the Act. It applies to all members.", 2),
+    ("Acme Inc. filed the claim. It was denied.", 2),
+    ("The rate rose to 3.5% last year. It has since fallen.", 2),
+    ("Contact us at help@acme.co.uk. We reply within 24 hours.", 2),
+    ("The U.S. policy differs. It covers flood.", 2),
+    ("Payment of 1,500.00 is due. No extensions.", 2),
+    ("Claims must be filed by Jan. 31. Late claims are rejected.", 2),
+    ("J. Smith signed it. The claim closed.", 2),
+    ("One. Two. Three.", 3),
+    ("Is it covered? Yes! It is.", 3),
+    ('He said "it is covered." We agreed.', 2),
+]
+
+
+def test_abbreviations_do_not_end_a_sentence():
+    for text, expected in SPLIT_CASES:
+        assert len(split_sentences(text)) == expected, text
+
+
+def test_dotted_acronyms_split_but_domains_do_not():
+    # Every dotted piece is short, so it is an acronym, not a boundary.
+    assert len(split_sentences("The U.S. policy differs. It covers flood.")) == 2
+    # A domain has a long piece, so the final period really does end it.
+    assert len(split_sentences("Email help@acme.co.uk. We reply.")) == 2
+    assert split_sentences("Email help@acme.co.uk. We reply.")[0].endswith("co.uk.")
+
+
+def test_bad_split_no_longer_corrupts_the_verdict():
+    """Regression: splitting on "Art." stranded the claim from its negation.
+
+    The fragment "13, cover flood damage." carried no negation cue, so polarity
+    parity passed it, and redacted() returned it as text safe to show. That
+    inverted the answer's meaning.
+    """
+    answer = "The policy does not, per Art. 13, cover flood damage."
+    sources = ["The policy covers flood damage, per Art. 13."]
+    report = ground_text(answer, sources)
+
+    assert len(report.sentences) == 1            # one sentence, not two
+    assert not report.faithful
+    assert "polarity" in report.sentences[0].reason
+    assert report.redacted() == ""               # nothing was safe to show
+
+
+def test_empty_and_unterminated_text():
+    assert split_sentences("") == []
+    assert split_sentences("   ") == []
+    assert split_sentences("No terminal punctuation") == ["No terminal punctuation"]
+    assert ground_text("", ["anything"]).faithful     # nothing to contradict
+
+
+def test_unknown_abbreviation_still_splits():
+    """Unknown abbreviations fall back to the old behaviour, never worse."""
+    assert len(split_sentences("Filed by Xyz. The claim closed.")) == 2

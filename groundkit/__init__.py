@@ -17,6 +17,7 @@ from .facts import FactStore, normalise
 from .negation import negated_tokens, polarity_conflicts
 from .provenance import Grounded, Provenance
 from .quantities import extract_quantities, unsupported_quantities
+from .sentences import ABBREVIATIONS, split_sentences
 from .source import (
     EvidenceReport,
     Freshness,
@@ -30,8 +31,9 @@ from .source import (
 from .text import GroundingReport, SentenceVerdict, ground_text, support_score
 from .verify import contradictions, ground_record, trusted, verify_claim
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
+    "ABBREVIATIONS",
     "EvidenceReport",
     "FactStore",
     "Freshness",
@@ -53,6 +55,7 @@ __all__ = [
     "negated_tokens",
     "normalise",
     "polarity_conflicts",
+    "split_sentences",
     "support_score",
     "trusted",
     "unsupported_quantities",

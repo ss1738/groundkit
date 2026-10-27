@@ -25,19 +25,13 @@ can extract into fields.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from .negation import polarity_conflicts
 from .provenance import Provenance
 from .quantities import unsupported_quantities
+from .sentences import split_sentences
 from .tokens import content_tokens as _content_tokens
-
-
-def split_sentences(text: str) -> list[str]:
-    """Naive sentence split on terminal punctuation."""
-    parts = re.split(r"(?<=[.!?])\s+", text.strip())
-    return [p.strip() for p in parts if p.strip()]
 
 
 def support_score(sentence: str, source: str) -> float:
