@@ -34,7 +34,7 @@ from .source import (
 from .text import GroundingReport, SentenceVerdict, ground_text, support_score
 from .verify import contradictions, ground_record, trusted, verify_claim
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __all__ = [
     "ABBREVIATIONS",
     "EvidenceReport",

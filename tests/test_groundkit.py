@@ -557,3 +557,25 @@ def test_rejections_are_the_reliable_direction():
     ).faithful
     # Does not fire, and is wrong not to.
     assert ground_text("Acme sued Beta Corp.", ["Beta Corp sued Acme."]).faithful
+
+
+def test_quantity_abstains_on_comparatives():
+    """A figure governed by a comparative is a bound, so presence settles nothing."""
+    # "over 23.5 million" is not refuted by evidence saying 13 million.
+    assert ground_text(
+        "Westlife made over 23.5 million sales.", ["Certified for 13 million."]
+    ).faithful
+    assert ground_text("A rate of at least 5%.", ["A rate of 7%."]).faithful
+    assert ground_text("Up to 50 people may attend.", ["Up to 100 may attend."]).faithful
+
+    # Relational prepositions are not comparatives: two stated limits still
+    # contradict each other, which is the case this library started from.
+    bad = ground_text(
+        "Customers may request a refund within 30 days of purchase.",
+        ["Customers may request a refund within 14 days of purchase."],
+    )
+    assert not bad.faithful
+    assert "30 day" in bad.sentences[0].reason
+    # Plain quoted figures are unaffected.
+    assert not ground_text("The rate is 5%.", ["The rate is 7%."]).faithful
+    assert not ground_text("Take 500 mg daily.", ["Take 250 mg daily."]).faithful

@@ -23,9 +23,18 @@ expensive:
 * ordinals, version-like strings and anything not parsed are ignored rather than
   guessed at.
 
-What it does not do: arithmetic (it will not derive "50%" from "1 in 2"), unit
-systems beyond time, or ranges. It answers one question, whether the figure was
-in the evidence, and leaves everything else to the caller.
+It also abstains where presence is the wrong test. "Refunds take **over** 14
+days" is not settled by looking for 14 in the evidence: a source saying 21 days
+supports it and a source saying 14 days may not. Comparatives are therefore
+excluded from the parity requirement rather than guessed at. Measured on
+VitaminC, 73.5% of this check's false positives carried a comparative
+quantifier; abstaining on them moved precision from 0.476 to 0.562 against a
+base rate of 0.423.
+
+What it does not do: arithmetic (it will not derive "50%" from "1 in 2"),
+comparison (it abstains instead, see above), unit systems beyond time, or
+ranges. It answers one question, whether the figure was quoted from the
+evidence, and leaves everything else to the caller.
 """
 
 from __future__ import annotations
@@ -80,6 +89,36 @@ _RE_WORD_UNIT = re.compile(
 )
 _RE_BARE = re.compile(r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)(?![\w.]*[a-z])", re.IGNORECASE)
 
+# A figure governed by one of these is a bound, not a quoted value, so its
+# presence in the evidence proves nothing either way.
+_RE_COMPARATIVE = re.compile(
+    # Only cues that make the figure a bound. Relational prepositions are
+    # deliberately absent: "within 30 days" against "within 14 days" is a real
+    # contradiction between two stated limits, not an unanswerable comparison.
+    r"\b(over|under|above|below|more than|less than|fewer than|greater than|"
+    r"at least|at most|no more than|no fewer than|up to|as many as|as much as|"
+    r"approximately|nearly|almost|roughly|about|around|exceeds?|exceeding|"
+    r"surpass(?:es|ing)?|minimum|maximum)\b",
+    re.IGNORECASE,
+)
+_COMPARATIVE_REACH = 24  # characters from the cue to the figure it governs
+
+
+def _bounded_values(text: str) -> set[str]:
+    """Canonical values that a comparative governs, which must not be required."""
+    bounded: set[str] = set()
+    for cue in _RE_COMPARATIVE.finditer(text):
+        window = text[cue.end(): cue.end() + _COMPARATIVE_REACH]
+        for rx, group in ((_RE_CURRENCY, 2), (_RE_CURRENCY_SUFFIX, 1),
+                          (_RE_NUM_UNIT, 1), (_RE_BARE, 1)):
+            m = rx.search(window)
+            if m:
+                bounded.add(_fmt(_num(m.group(group))))
+        m = _RE_WORD_UNIT.search(window)
+        if m:
+            bounded.add(_fmt(float(_NUMBER_WORDS[m.group(1).lower()])))
+    return bounded
+
 
 def _num(raw: str) -> float:
     return float(raw.replace(",", ""))
@@ -131,15 +170,18 @@ def extract_quantities(text: str) -> set[tuple[str, str]]:
 def unsupported_quantities(
     sentence: str, sources: list[str]
 ) -> set[tuple[str, str]]:
-    """Quantities asserted by ``sentence`` that appear in no source.
+    """Quantities ``sentence`` quotes that appear in no source.
 
     A bare sentence number matches the same value under any unit; a sentence
     quantity carrying a unit matches the same unit, or a bare source number of
-    the same value.
+    the same value. Figures governed by a comparative ("over 14 days", "at least
+    5%") are skipped, because their presence in the evidence is not what decides
+    whether they hold.
     """
     in_sentence = extract_quantities(sentence)
     if not in_sentence:
         return set()
+    bounded = _bounded_values(sentence)
     in_sources: set[tuple[str, str]] = set()
     for source in sources:
         in_sources |= extract_quantities(source)
@@ -147,6 +189,8 @@ def unsupported_quantities(
 
     missing = set()
     for value, unit in in_sentence:
+        if value in bounded:
+            continue  # a bound, not a quoted figure; presence settles nothing
         if unit == "":
             if value not in source_values:
                 missing.add((value, unit))

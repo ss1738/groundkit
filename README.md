@@ -138,14 +138,23 @@ exactly:
 | overlap, threshold 0.2 | 17.5% | 0.330 | 0.164 | +0.077 |
 | overlap, threshold 0.3 (default) | 33.1% | 0.575 | 0.151 | +0.064 |
 | overlap, threshold 0.6 (old default) | 69.4% | 0.895 | 0.112 | +0.025 |
-| **quantity parity** | **4.6%** | 0.128 | **0.242** | **+0.155** |
+| **quantity parity** | **4.5%** | 0.117 | **0.229** | **+0.142** |
 | polarity parity (off by default) | 9.6% | 0.112 | 0.102 | +0.015 |
 | shipped default (0.3 + quantity) | 36.3% | 0.640 | 0.153 | +0.066 |
 
-**Quantity parity is the check that earns its place**: it fires on 4.6% of
-sentences at roughly three times the base rate. Its recall is low because most
-hallucinations are not numeric, which is the correct behaviour rather than a
-shortfall.
+**Quantity parity is the check that earns its place**: it fires on 4.5% of
+sentences at roughly two and a half times the base rate. Its recall is low
+because most hallucinations are not numeric, which is the correct behaviour
+rather than a shortfall.
+
+It abstains on comparatives, because presence is the wrong test for a bound:
+"over 23.5 million" is not refuted by evidence saying 13 million. On VitaminC,
+73.5% of this check's false positives carried a comparative quantifier, and
+abstaining lifted it from +0.053 to **+0.106** while firing on half as many
+pairs. On RAGTruth the same change cost it +0.013, because models there do
+sometimes hallucinate a bound outright. Both numbers are in the repo. It is kept
+because firing on a bound is unsound reasoning even when it happens to land on
+the right answer.
 
 **Overlap loses lift as its threshold rises**, because a higher bar rejects more
 correct sentences than wrong ones. The default was 0.6, which flagged 69% of all
