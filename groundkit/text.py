@@ -117,13 +117,32 @@ class GroundingReport:
         return " ".join(v.sentence for v in self.sentences if v.supported)
 
 
+def _nearest(sentence: str, evidence_sentences: list[str], k: int = 3) -> list[str]:
+    """The ``k`` evidence sentences closest to ``sentence``, for polarity scoping.
+
+    Polarity is a property of a clause, not of a document. Comparing against a
+    whole passage lets one negated clause anywhere in it poison every answer
+    sentence that reuses a word from it: a 2 kB passage containing "it is not
+    clear where she was arrested" made every later sentence mentioning "she"
+    look like a polarity conflict. Measured on RAGTruth, whole-document
+    comparison fired on 30.4% of sentences at precision 0.070 against a base
+    rate of 0.087, which is worse than firing at random. Scoping to the nearest
+    few evidence sentences drops that to 9.6% at precision 0.102.
+    """
+    if not evidence_sentences:
+        return []
+    return sorted(
+        evidence_sentences, key=lambda s: -support_score(sentence, s)
+    )[:k]
+
+
 def ground_text(
     answer: str,
     sources: list[str],
     *,
-    threshold: float = 0.6,
+    threshold: float = 0.3,
     check_quantities: bool = True,
-    check_polarity: bool = True,
+    check_polarity: bool = False,
 ) -> GroundingReport:
     """Check each sentence of ``answer`` against ``sources``.
 
@@ -138,16 +157,27 @@ def ground_text(
         answer: The model's free-text answer.
         sources: The retrieved passages it was supposed to rely on.
         threshold: Minimum content-word overlap for a sentence to count as
-            supported.
+            supported. Default 0.3, chosen by sweeping RAGTruth: lift over the
+            base rate falls monotonically as the threshold rises, because a
+            higher bar flags more correct sentences than wrong ones. At 0.6 it
+            flagged 69.4% of all sentences for a lift of +0.025; at 0.3 it
+            flags 33.1% for +0.064. Raise it for short, quoted evidence; lower
+            it for long passages.
         check_quantities: Require every number, duration, percentage and
             currency amount the sentence asserts to appear somewhere in
             ``sources``. See :mod:`groundkit.quantities` for what is and is not
             canonicalised.
         check_polarity: Flag a sentence that negates what the evidence affirms,
-            or affirms what it negates. See :mod:`groundkit.negation` for the
-            cue-and-scope rules and their limits.
+            or affirms what it negates. **Off by default**, on measurement:
+            scoped to the nearest evidence sentences it reaches precision 0.102
+            against a RAGTruth base rate of 0.087, a lift of only +0.015, and
+            adding it to any other combination of checks lowered that
+            combination's lift. It earns its place on short, single-claim
+            evidence, which is the regime it was built and tested in. Turn it
+            on there, and measure before trusting it on long passages.
     """
     verdicts: list[SentenceVerdict] = []
+    evidence_sentences = [t for src in sources for t in split_sentences(src)]
     for sentence in split_sentences(answer):
         best_score, best_index = 0.0, None
         for i, source in enumerate(sources):
@@ -164,7 +194,7 @@ def ground_text(
                     sorted(f"{v} {u}".strip() for v, u in missing)
                 )
         if supported and check_polarity:
-            flipped = polarity_conflicts(sentence, sources)
+            flipped = polarity_conflicts(sentence, _nearest(sentence, evidence_sentences))
             if flipped:
                 supported = False
                 named = sorted(flipped)

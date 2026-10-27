@@ -194,7 +194,9 @@ def test_exact_duration_conversions_are_equivalent():
 
 def test_quantity_check_only_adds_strictness():
     """A sentence failing on overlap is not rescued by matching quantities."""
-    v = ground_text("You have two weeks.", ["You have 14 days."]).sentences[0]
+    v = ground_text(
+        "You have two weeks.", ["You have 14 days."], threshold=0.6
+    ).sentences[0]
     assert not v.supported
     assert v.reason == "content words absent from the evidence"
 
@@ -243,7 +245,9 @@ def test_verdict_reason_is_set_for_both_failure_modes():
 def test_polarity_flip_is_caught_at_a_perfect_overlap_score():
     """The worst overlap failure: dropping a "not" scores 1.0."""
     src = ["Refunds are not available after 14 days."]
-    v = ground_text("Refunds are available after 14 days.", src).sentences[0]
+    v = ground_text(
+        "Refunds are available after 14 days.", src, check_polarity=True
+    ).sentences[0]
     assert v.score == 1.0            # every answer word is in the evidence
     assert not v.supported
     assert v.provenance is Provenance.UNSUPPORTED
@@ -253,16 +257,18 @@ def test_polarity_flip_is_caught_at_a_perfect_overlap_score():
 def test_polarity_catches_both_directions():
     affirmed = ["The drug is approved for children."]
     negated = ["The drug is not approved for children."]
-    assert not ground_text("The drug is not approved for children.", affirmed).faithful
-    assert not ground_text("The drug is approved for children.", negated).faithful
+    pol = {"check_polarity": True}
+    assert not ground_text("The drug is not approved for children.", affirmed, **pol).faithful
+    assert not ground_text("The drug is approved for children.", negated, **pol).faithful
     # Agreeing polarity is left alone, in either direction.
-    assert ground_text("The drug is approved for children.", affirmed).faithful
-    assert ground_text("The drug is not approved for children.", negated).faithful
+    assert ground_text("The drug is approved for children.", affirmed, **pol).faithful
+    assert ground_text("The drug is not approved for children.", negated, **pol).faithful
 
 
 def test_polarity_handles_contractions_without_tripping_on_can():
     assert not ground_text(
-        "The policy doesn't cover flood damage.", ["The policy covers flood damage."]
+        "The policy doesn't cover flood damage.", ["The policy covers flood damage."],
+        check_polarity=True,
     ).faithful
     # A bare "can" must not read as "can't".
     assert ground_text(
@@ -272,8 +278,12 @@ def test_polarity_handles_contractions_without_tripping_on_can():
 
 
 def test_polarity_post_cue_scopes_backwards():
-    assert not ground_text("The claim was denied.", ["The claim was approved."]).faithful
-    assert ground_text("The claim was denied.", ["The claim was denied."]).faithful
+    assert not ground_text(
+        "The claim was denied.", ["The claim was approved."], check_polarity=True
+    ).faithful
+    assert ground_text(
+        "The claim was denied.", ["The claim was denied."], check_polarity=True
+    ).faithful
 
 
 def test_polarity_skips_pseudo_cues_and_respects_terminators():
@@ -296,7 +306,7 @@ def test_polarity_one_agreeing_source_clears_the_conflict():
 def test_polarity_check_can_be_disabled():
     src = ["Refunds are not available after 14 days."]
     answer = "Refunds are available after 14 days."
-    assert not ground_text(answer, src).faithful
+    assert not ground_text(answer, src, check_polarity=True).faithful
     assert ground_text(answer, src, check_polarity=False).faithful
 
 
@@ -473,7 +483,7 @@ def test_bad_split_no_longer_corrupts_the_verdict():
     """
     answer = "The policy does not, per Art. 13, cover flood damage."
     sources = ["The policy covers flood damage, per Art. 13."]
-    report = ground_text(answer, sources)
+    report = ground_text(answer, sources, check_polarity=True)
 
     assert len(report.sentences) == 1            # one sentence, not two
     assert not report.faithful
@@ -543,7 +553,7 @@ def test_rejections_are_the_reliable_direction():
         "Refunds within 30 days.", ["Refunds within 14 days."]
     ).faithful
     assert not ground_text(
-        "Refunds are available.", ["Refunds are not available."]
+        "Refunds are available.", ["Refunds are not available."], check_polarity=True
     ).faithful
     # Does not fire, and is wrong not to.
     assert ground_text("Acme sued Beta Corp.", ["Beta Corp sued Acme."]).faithful

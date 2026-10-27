@@ -100,7 +100,8 @@ ground_text("Refunds are issued within 30 days.",
 Overlap alone scores that 0.875 and passes it. The quantity check catches wrong
 numbers, durations, percentages, currency amounts and doses, converting only
 where the conversion is exact (`two weeks` and `14 days` are the same quantity;
-a month is never 30 days). Pass `check_quantities=False` to disable it.
+a month is never 30 days). It is the strongest of the three checks on public
+data, measured below. Pass `check_quantities=False` to disable it.
 
 A third check, polarity parity, catches the highest-scoring failure of all:
 
@@ -120,13 +121,54 @@ passage agrees with the answer's polarity. `benchmarks/bench_polarity.py` scores
 hand-built, so read it as a regression floor rather than evidence of
 generalisation. Pass `check_polarity=False` to disable it.
 
-### These checks reject, they do not verify
+### These checks reject, they do not verify, and only one of them is strong
 
-This is the most important line in the README. When a check fires it is
-reliable. When nothing fires, that is the absence of a detected problem, not a
-finding of support.
+When nothing fires, that is the absence of a detected problem, not a finding of
+support. And the rejections themselves vary a lot in quality, so here are the
+measured numbers rather than a claim.
 
-Measured against this library, every one of these passes:
+`benchmarks/bench_public.py` on the **RAGTruth** test split (arXiv:2401.00396,
+MIT): 18,821 sentences of real LLM output with human span labels, base
+hallucination rate **0.087**. The column that matters is **lift**, precision
+minus the base rate, because a check that fires at random scores the base rate
+exactly:
+
+| check | flags | recall | precision | lift |
+|---|---|---|---|---|
+| overlap, threshold 0.2 | 17.5% | 0.330 | 0.164 | +0.077 |
+| overlap, threshold 0.3 (default) | 33.1% | 0.575 | 0.151 | +0.064 |
+| overlap, threshold 0.6 (old default) | 69.4% | 0.895 | 0.112 | +0.025 |
+| **quantity parity** | **4.6%** | 0.128 | **0.242** | **+0.155** |
+| polarity parity (off by default) | 9.6% | 0.112 | 0.102 | +0.015 |
+| shipped default (0.3 + quantity) | 36.3% | 0.640 | 0.153 | +0.066 |
+
+**Quantity parity is the check that earns its place**: it fires on 4.6% of
+sentences at roughly three times the base rate. Its recall is low because most
+hallucinations are not numeric, which is the correct behaviour rather than a
+shortfall.
+
+**Overlap loses lift as its threshold rises**, because a higher bar rejects more
+correct sentences than wrong ones. The default was 0.6, which flagged 69% of all
+sentences; it is now 0.3. Raise it for short quoted evidence, lower it for long
+passages.
+
+**Polarity parity is off by default.** On long passages it adds almost nothing
+(+0.015) and *lowers* the lift of any combination it joins. It was built and
+measured on short single-claim evidence, where it does well, and that is the
+regime to turn it on for. Earlier versions compared polarity across the whole
+evidence blob, so one negated clause in a 2 kB passage poisoned every answer
+sentence reusing a word from it; that is fixed, and the check is now scoped to
+the nearest evidence sentences.
+
+On **VitaminC** (arXiv:2103.08541), where claims are human paraphrases rather
+than copied from the evidence, precision sits near the base rate throughout.
+These checks assume an answer reuses the evidence's wording and figures. Where
+it does not, they are close to uninformative.
+
+This is why a clean report means **"none of my cheap checks caught anything"**.
+
+Separately from the statistics above, there is a category these checks cannot
+see at all. Every one of these passes:
 
 | Answer | Evidence says | Score | Verdict |
 |---|---|---|---|
@@ -141,8 +183,8 @@ argument-order inversion is invisible to all three checks, as are antonyms
 without a cue and anything needing paraphrase-level inference. No list of rules
 will fix that; it needs a model that represents meaning.
 
-So `report.faithful` means **"none of my cheap checks caught anything"**. Do not
-wire it to auto-accept an answer. `redacted()` removes what was flagged, which is
+So `report.faithful` means nothing fired. Do not wire it to auto-accept an
+answer. `redacted()` removes what was flagged, which is
 not the same as returning text that is safe to show: the reversed claims above
 survive redaction intact. The reliable use is the other direction, routing
 flagged answers to review or rejection. Those cases are pinned in
@@ -251,8 +293,8 @@ Pass `revision_from="content"` to hash the text deliberately instead.
   case-normalised comparison.
 - **`ground_record(store, record) -> {key: Grounded}`**, **`verify_claim(...)`**
 - **`trusted(grounded)`**: VERIFIED values only. **`contradictions(grounded)`**.
-- **`ground_text(answer, sources, threshold=0.6, check_quantities=True,
-  check_polarity=True) -> GroundingReport`** with `.faithful`, `.supported_ratio`, `.unsupported`,
+- **`ground_text(answer, sources, threshold=0.3, check_quantities=True,
+  check_polarity=False) -> GroundingReport`** with `.faithful`, `.supported_ratio`, `.unsupported`,
   `.flagged()`, `.redacted()`. Each `.sentences[i]` is a `SentenceVerdict`
   carrying `.supported`, `.score`, `.reason` and `.provenance`
   (`VERIFIED` / `UNSUPPORTED`).
