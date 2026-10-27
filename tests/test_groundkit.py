@@ -97,3 +97,45 @@ def test_empty_answer_is_vacuously_faithful():
     report = ground_text("", ["anything"])
     assert report.faithful is True
     assert report.supported_ratio == 1.0
+
+
+def test_stale_snapshot_still_verifies():
+    """Grounding is not freshness: a stale snapshot still verifies.
+
+    Pins the documented limitation in README "Scope: grounding is not freshness".
+    An answer that matches its retrieved chunk perfectly is VERIFIED even when the
+    authoritative source has since changed, because nothing records a revision or
+    a fetched-at time. If this ever stops being true, the README must change too.
+    """
+    stale_chunk = "Customers may request a refund within 30 days of purchase."
+    answer = "Customers may request a refund within 30 days of purchase."
+
+    report = ground_text(answer, [stale_chunk])
+    assert report.faithful
+    assert report.sentences[0].score == 1.0
+    assert report.sentences[0].provenance is Provenance.VERIFIED
+
+    # Same answer against the *current* policy: a single swapped number still
+    # clears the lexical threshold, so the text layer cannot catch it either.
+    current = "Customers may request a refund within 14 days of purchase."
+    assert ground_text(answer, [current]).sentences[0].supported
+
+    # A store loaded from stale data is equally unaware it is stale.
+    assert verify_claim(FactStore({"refund_window_days": 30}),
+                        "refund_window_days", 30).is_trustworthy
+
+    # The structured layer does catch the wrong value within a current snapshot.
+    g = verify_claim(FactStore({"refund_window_days": 14}), "refund_window_days", 30)
+    assert g.provenance is Provenance.CONTRADICTED
+    assert g.value == 14
+
+
+def test_no_freshness_api_is_advertised():
+    """No public name promises revision/staleness handling."""
+    import groundkit
+
+    names = [n for n in dir(groundkit) if not n.startswith("_")]
+    assert not [
+        n for n in names
+        if any(k in n.lower() for k in ("revision", "stale", "fresh", "expire"))
+    ]

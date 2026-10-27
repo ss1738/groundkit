@@ -39,7 +39,12 @@ Repo, tests, benchmark: https://github.com/ss1738/groundkit
 Honest scope: the text check is lexical (content-word overlap), it catches
 sentences that add unsupported content, the common RAG failure, but not
 paraphrase-level entailment; drop in an NLI model for that. The structured layer
-is exact and is where the 100% catch rate comes from. Feedback welcome.
+is exact and is where the 100% catch rate comes from. groundkit also checks
+grounding, not freshness: it asks whether an answer is supported by the evidence it
+was given, never whether that evidence is still current, and there is no revision or
+staleness hook, so an answer citing a stale chunk perfectly still comes back
+VERIFIED. Keeping the index current stays with the ingestion pipeline. Feedback
+welcome.
 
 ## First comment (post right after)
 

@@ -1,12 +1,17 @@
 name: Publish to PyPI
 
-# Publishes on a GitHub Release. Uses PyPI Trusted Publishing (OIDC) -- configure
-# the publisher once at https://pypi.org/manage/project/groundkit/settings/publishing/
-# (workflow: publish.yml, environment: pypi). No API token needed.
+# DISABLED: the PyPI name `groundkit` belongs to an unrelated project
+# (https://pypi.org/project/groundkit/, github.com/tafreeman/groundkit), so this
+# repo cannot publish under it and a GitHub Release must not try. Trusted
+# Publishing for a project we do not own cannot be configured either.
+#
+# To re-enable, first pick a distribution name that is free on PyPI, set it as
+# `name` in pyproject.toml, configure Trusted Publishing for that project, then
+# restore the `release` trigger below. Until then this runs only when dispatched
+# by hand, so nothing fires accidentally.
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 jobs:
   pypi:

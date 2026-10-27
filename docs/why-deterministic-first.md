@@ -75,6 +75,12 @@ exactly, the structured layer above is the right tool; for "did the model bolt o
 whole claim that isn't in the sources", the lexical overlap is cheap, dependency-free,
 and surprisingly effective.
 
+Both layers check an answer against the snapshot they were handed, never whether that
+snapshot is still current. Replace an authoritative policy and leave the old chunk in
+the index and the old answer still verifies against it, correctly and uselessly.
+"Supported by this evidence" and "this evidence is still current" are two claims, and
+deterministic grounding only settles the first.
+
 ## Try it
 
 ```python

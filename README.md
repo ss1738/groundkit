@@ -1,7 +1,6 @@
 # groundkit
 
 [![CI](https://github.com/ss1738/groundkit/actions/workflows/ci.yml/badge.svg)](https://github.com/ss1738/groundkit/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/groundkit)](https://pypi.org/project/groundkit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Deterministic-first grounding for LLM output.** A model can *propose*, but it
@@ -81,6 +80,31 @@ entailment, so a mostly-grounded sentence that swaps a single token (a wrong num
 a negation) can still pass; use an NLI model where that matters. For exact
 wrong-value detection, use the structured layer above.
 
+## Scope: grounding is not freshness
+
+groundkit answers **"is this answer supported by the evidence it was given?"** It
+does not answer **"is that evidence still current?"** Those are separate claims and
+groundkit only makes the first one.
+
+Concretely: index a policy saying "refunds within 30 days", answer from it, then
+change the authoritative policy to 14 days while the old chunk stays in your index.
+`ground_text` still returns `VERIFIED` with a support score of 1.0. The answer
+matches its retrieved source perfectly and is wrong about current policy. The same
+holds for `FactStore`: a store loaded from stale data returns `VERIFIED`, because
+nothing records when it was loaded.
+
+There is **no revision or staleness hook**. `Grounded.source` is a free-text label,
+not a document id, revision hash or fetched-at time, and nothing in the library
+compares one to the live source. Keeping the indexed snapshot current is the
+ingestion pipeline's job. If you need both claims, track revision and fetched-at
+beside each chunk and check them separately, then treat "supported by this snapshot"
+and "snapshot still current" as two results rather than making attribution carry
+both.
+
+Within a single snapshot, the structured layer does catch wrong values exactly:
+`verify_claim(FactStore({"refund_window_days": 14}), "refund_window_days", 30)`
+returns `CONTRADICTED` and keeps 14.
+
 ## API
 
 - **`FactStore(facts)`**: `.has` / `.get` / `.matches` / `.add`, whitespace- and
@@ -96,10 +120,13 @@ wrong-value detection, use the structured layer above.
 ## Install
 
 ```bash
-pip install groundkit      # or: pip install -e . from a clone
+git clone https://github.com/ss1738/groundkit
+cd groundkit && pip install -e .
 ```
 
-Python ≥ 3.9, no runtime dependencies.
+Not published on PyPI. The name `groundkit` there belongs to an unrelated project,
+so `pip install groundkit` does **not** install this library. Python ≥ 3.9, no
+runtime dependencies.
 
 ## Related
 
