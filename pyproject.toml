@@ -21,7 +21,9 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "ruff>=0.4"]
+# ruff is pinned to a minor range: CI runs `ruff check .`, and an unpinned
+# `ruff>=0.4` silently picks up new default rules on release and breaks the build.
+dev = ["pytest>=7.0", "ruff>=0.17,<0.18"]
 
 [project.urls]
 Homepage = "https://github.com/ss1738/groundkit"
