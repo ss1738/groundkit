@@ -183,6 +183,35 @@ Within a single snapshot both layers catch wrong values:
 returns `CONTRADICTED` and keeps 14, and `ground_text` flags the same swap in free
 text through quantity parity.
 
+## Weaviate
+
+`groundkit.weaviate` turns a v4 query result into passages that carry their own
+provenance. It is duck-typed and **imports nothing**, so groundkit stays
+dependency-free and the adapter works against a real client, a stub or a fixture.
+
+```python
+from groundkit.weaviate import to_passages, revision_resolver, ground_weaviate
+
+passages = to_passages(response, text_property="content")
+report = ground_weaviate(answer, passages, resolver=revision_resolver(collection))
+
+report.grounding.faithful      # is the answer supported by those chunks?
+report.freshness.all_current   # are those chunks still what Weaviate holds?
+report.trustworthy             # both
+```
+
+Weaviate already stores the two things a freshness check needs: `uuid` identifies
+the chunk and `last_update_time` moves whenever it is updated, so you get a
+revision without tracking one yourself. Update a chunk in the collection and the
+answer that quoted it stays `faithful` (correctly, it does match what it was
+given) while freshness turns `STALE`, naming both revisions. A deleted object also
+reads `STALE`, because a source that no longer exists is not current.
+
+If the query did not request `last_update_time`, `to_passages` **raises and tells
+you what to add**, rather than falling back to a content hash. A silent fallback
+would compare two different kinds of revision later and report `STALE` forever.
+Pass `revision_from="content"` to hash the text deliberately instead.
+
 ## API
 
 - **`FactStore(facts)`**: `.has` / `.get` / `.matches` / `.add`, whitespace- and

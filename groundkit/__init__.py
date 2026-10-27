@@ -7,6 +7,9 @@ answer asserts appears in the evidence, and that it does not flip the evidence's
 polarity); it is exact and the model never
 overrules it. Layer 2 --
 whatever an LLM contributes -- is, by construction, only ever tagged ADVISORY.
+:mod:`groundkit.weaviate` adapts a Weaviate v4 query result into both, without
+importing the client.
+
 Every value carries its :class:`Provenance`, so nothing unverified is ever
 silently presented as truth. :mod:`groundkit.source` answers the separate
 question of whether the evidence is still current, and reports it as a
@@ -31,7 +34,7 @@ from .source import (
 from .text import GroundingReport, SentenceVerdict, ground_text, support_score
 from .verify import contradictions, ground_record, trusted, verify_claim
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = [
     "ABBREVIATIONS",
     "EvidenceReport",
