@@ -1,9 +1,15 @@
 name: Publish to PyPI
 
-# Publishes on a GitHub Release. Uses PyPI Trusted Publishing (OIDC) -- configure
-# the publisher once at
-# https://pypi.org/manage/project/groundkit-core/settings/publishing/
-# (workflow: publish.yml, environment: pypi). No API token needed.
+# Publishes on a GitHub Release, using PyPI Trusted Publishing (OIDC).
+#
+# FIRST PUBLISH: the project does not exist on PyPI yet, so its settings page
+# 404s. Add a *pending publisher* instead, at
+#   https://pypi.org/manage/account/publishing/
+# with: project name groundkit-core, owner ss1738, repository groundkit,
+# workflow filename publish.yml, environment pypi.
+# Publishing the first GitHub Release then creates the project. Afterwards it is
+# managed at https://pypi.org/manage/project/groundkit-core/settings/publishing/
+# No API token is involved at any point.
 #
 # The distribution is `groundkit-core`, not `groundkit`: that name on PyPI
 # belongs to an unrelated project. The import name is unchanged.
