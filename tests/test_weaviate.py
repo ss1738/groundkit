@@ -179,3 +179,30 @@ def test_adapter_does_not_import_weaviate():
 
     assert adapter.__name__ == "groundkit.weaviate"
 
+
+
+def test_index_freshness_is_not_authority_freshness():
+    """A stale index reports CURRENT, because nothing in the index changed.
+
+    Raised by RateLedger on the Weaviate forum. "Unchanged in Weaviate" and
+    "unchanged at the upstream authority" are different claims, and the adapter
+    only ever answers the first.
+    """
+    from groundkit import digest
+
+    indexed = Obj("abc-123", "Policies", {"text": OLD}, Meta(T0))
+    passages = to_passages([indexed], fetched_at=T0)
+    weaviate = Collection({"abc-123": indexed})      # index never changed
+
+    via_index = ground_weaviate(OLD, passages, resolver=revision_resolver(weaviate))
+    assert via_index.freshness.verdicts[0].freshness is Freshness.CURRENT
+    assert via_index.trustworthy                      # and the answer is still wrong
+    assert via_index.freshness.verdicts[0].authority == "weaviate index"
+
+    # The same answer and chunk, resolved against the source of truth.
+    via_authority = ground_weaviate(
+        OLD, passages, resolver=lambda uri: digest(NEW), authority="policy store"
+    )
+    assert via_authority.freshness.verdicts[0].freshness is Freshness.STALE
+    assert not via_authority.trustworthy
+    assert via_authority.freshness.verdicts[0].authority == "policy store"

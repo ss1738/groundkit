@@ -109,12 +109,21 @@ class SourceDescriptor:
 
 @dataclass(frozen=True)
 class FreshnessVerdict:
-    """One source's freshness, with the reason attached."""
+    """One source's freshness, with the reason and the authority attached."""
 
     source: SourceDescriptor
     freshness: Freshness
     note: str | None = None
     live_revision: str | None = None
+    authority: str | None = None
+    """What the resolver actually spoke for.
+
+    CURRENT is only ever as strong as this. A resolver pointed at your search
+    index answers "unchanged in the index", which is a different claim from
+    "unchanged at the source of truth": an index holding a stale copy reports
+    CURRENT quite correctly, because nothing in the index has changed. Name the
+    authority so the distinction survives into the output.
+    """
 
     @property
     def is_current(self) -> bool:
@@ -159,6 +168,7 @@ def check_source(
     resolver: Callable[[str], str | None] | None = None,
     *,
     now: datetime | None = None,
+    authority: str | None = None,
 ) -> FreshnessVerdict:
     """Decide whether one snapshot still reflects its source.
 
@@ -169,16 +179,20 @@ def check_source(
             not current. An exception is caught and reported the same way, so a
             failing lookup degrades rather than taking the request down.
         now: Override the clock, for testing.
+        authority: What ``resolver`` speaks for, recorded on the verdict. A
+            resolver pointed at a search index can only ever report "unchanged
+            in the index"; say so here rather than letting CURRENT be read as
+            "unchanged at the source of truth".
     """
     moment = now or datetime.now(timezone.utc)
+
+    def verdict(freshness, note=None, live=None):
+        return FreshnessVerdict(source, freshness, note, live, authority)
 
     if source.ttl_seconds is not None:
         age = source.age_seconds(moment)
         if age is not None and age > source.ttl_seconds:
-            return FreshnessVerdict(
-                source, Freshness.EXPIRED,
-                note=f"lease of {source.ttl_seconds}s elapsed {age:.0f}s after fetch",
-            )
+            return verdict(Freshness.EXPIRED, note=f"lease of {source.ttl_seconds}s elapsed {age:.0f}s after fetch")
 
     if resolver is not None and source.revision is not None:
         try:
@@ -186,41 +200,23 @@ def check_source(
         except Exception as exc:  # noqa: BLE001 - a caller's resolver may
             # raise anything (network, auth, driver); a failed lookup must
             # degrade to UNKNOWN rather than take the request down.
-            return FreshnessVerdict(
-                source, Freshness.UNKNOWN,
-                note=f"resolver raised {type(exc).__name__}: {exc}",
-            )
+            return verdict(Freshness.UNKNOWN, note=f"resolver raised {type(exc).__name__}: {exc}")
         if live is None:
-            return FreshnessVerdict(
-                source, Freshness.UNKNOWN,
-                note="resolver returned no revision for this uri",
-            )
+            return verdict(Freshness.UNKNOWN, note="resolver returned no revision for this uri")
         if live != source.revision:
-            return FreshnessVerdict(
-                source, Freshness.STALE,
+            return verdict(
+                Freshness.STALE,
                 note=f"indexed revision {source.revision}, source now {live}",
-                live_revision=live,
+                live=live,
             )
-        return FreshnessVerdict(
-            source, Freshness.CURRENT, note="revision matches the source",
-            live_revision=live,
-        )
+        return verdict(Freshness.CURRENT, note="revision matches the source", live=live)
 
     if source.ttl_seconds is not None:
-        return FreshnessVerdict(
-            source, Freshness.CURRENT,
-            note="within its lease; revision was not checked",
-        )
+        return verdict(Freshness.CURRENT, note="within its lease; revision was not checked")
 
     if source.revision is not None:
-        return FreshnessVerdict(
-            source, Freshness.UNKNOWN,
-            note="revision recorded but no resolver was supplied to compare it",
-        )
-    return FreshnessVerdict(
-        source, Freshness.UNKNOWN,
-        note="no revision and no lease recorded; nothing to check",
-    )
+        return verdict(Freshness.UNKNOWN, note="revision recorded but no resolver was supplied to compare it")
+    return verdict(Freshness.UNKNOWN, note="no revision and no lease recorded; nothing to check")
 
 
 def check_sources(
@@ -228,9 +224,12 @@ def check_sources(
     resolver: Callable[[str], str | None] | None = None,
     *,
     now: datetime | None = None,
+    authority: str | None = None,
 ) -> FreshnessReport:
-    """Check every source behind an answer."""
-    return FreshnessReport([check_source(s, resolver, now=now) for s in sources])
+    """Check every source behind an answer. See :func:`check_source`."""
+    return FreshnessReport(
+        [check_source(s, resolver, now=now, authority=authority) for s in sources]
+    )
 
 
 @dataclass(frozen=True)

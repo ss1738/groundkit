@@ -27,6 +27,22 @@ Those stay two results, as everywhere else in groundkit. An answer can be
 perfectly faithful to a chunk the collection has since changed, and that is a
 pipeline failure, not a model failure.
 
+**What "current" means here, and what it does not.** :func:`revision_resolver`
+asks Weaviate, so it answers *"unchanged in the index"*. That is not the same
+claim as *"unchanged at the source of truth"*, and the gap between them is
+exactly where a stale index lives. If the authoritative policy changes from 30
+days to 14 while the indexed chunk still says 30, this adapter reports CURRENT
+and ``trustworthy`` comes back True: nothing in Weaviate has changed, and the
+adapter is answering the question it was asked. The answer is still wrong about
+current policy.
+
+Pointing the resolver at the authoritative store instead reports STALE for the
+same answer and chunk. So there are two separate claims worth keeping visible,
+and :attr:`~groundkit.source.FreshnessVerdict.authority` records which one you
+got. A TTL lease is a third thing again: a decision to trust the snapshot for a
+period, not an observation that nothing changed. Credit to RateLedger on the
+Weaviate forum for drawing this boundary.
+
 A note on metadata: ``last_update_time`` is only populated when the query asks
 for it. Rather than silently falling back to a content hash, which would make
 every later freshness check disagree with itself, :func:`to_passages` raises and
@@ -167,6 +183,11 @@ def revision_resolver(
 ) -> Callable[[str], str | None]:
     """Build a ``uri -> current revision`` resolver backed by a live collection.
 
+    This resolves against **Weaviate**, so it answers "has the indexed object
+    changed?" and not "has the source of truth changed?". An index holding a
+    stale copy reports CURRENT, correctly and unhelpfully. Point a resolver at
+    your authoritative store if you need the second claim.
+
     ``collection`` is anything exposing ``.query.fetch_object_by_id(uuid)``, so a
     real Weaviate collection or a stub. ``revision_from`` must match what
     :func:`to_passages` used, or every check reports STALE.
@@ -199,14 +220,22 @@ def ground_weaviate(
     *,
     resolver: Callable[[str], str | None] | None = None,
     now: datetime | None = None,
+    authority: str | None = "weaviate index",
     **ground_kwargs: Any,
 ) -> EvidenceReport:
     """Ground an answer against retrieved passages and check they are current.
 
     Returns both results side by side. ``trustworthy`` needs both; read
     ``grounding`` and ``freshness`` separately to tell the two failures apart.
+
+    ``authority`` records what the resolver speaks for, and defaults to the
+    index because :func:`revision_resolver` asks Weaviate. Pass the name of your
+    source of truth when the resolver consults one, so CURRENT is not read as a
+    stronger claim than it is. See the module docstring.
     """
     return EvidenceReport(
         grounding=ground_text(answer, texts(passages), **ground_kwargs),
-        freshness=check_sources(sources(passages), resolver, now=now),
+        freshness=check_sources(
+            sources(passages), resolver, now=now, authority=authority
+        ),
     )

@@ -262,6 +262,26 @@ What the library will not do is let attribution carry both claims. There is no
 combined "verified and fresh" verdict, because the two failures are not
 interchangeable.
 
+**"Current" is only as strong as the authority you point the resolver at.**
+`revision_resolver(collection)` asks Weaviate, so it answers "unchanged in the
+index". If the authoritative policy changes from 30 days to 14 while the indexed
+chunk still says 30, that reports `CURRENT` and `trustworthy` comes back `True`:
+nothing in Weaviate changed, and the resolver answered the question it was asked.
+The answer is still wrong about current policy. Point the resolver at your source
+of truth and the same answer and chunk report `STALE`.
+
+So there are three distinct claims, and `FreshnessVerdict.authority` records
+which one you got:
+
+| | means | needs |
+|---|---|---|
+| index resolver | the indexed copy has not changed | a vector-store lookup |
+| authority resolver | the source of truth has not changed | an upstream lookup |
+| TTL lease | you chose to trust it for a period | nothing |
+
+A lease is a decision, not an observation. Credit to RateLedger on the Weaviate
+forum for drawing this boundary.
+
 Within a single snapshot both layers catch wrong values:
 `verify_claim(FactStore({"refund_window_days": 14}), "refund_window_days", 30)`
 returns `CONTRADICTED` and keeps 14, and `ground_text` flags the same swap in free
