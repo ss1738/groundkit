@@ -3,7 +3,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "groundkit"
+# The PyPI name `groundkit` belongs to an unrelated project, so the
+# distribution is published as groundkit-core. The import name is
+# unchanged: pip install groundkit-core, then `import groundkit`.
+name = "groundkit-core"
 version = "0.10.0"
 description = "Deterministic-first grounding for LLM output -- a model can propose, but never assert a fact. Every value carries its provenance."
 readme = "README.md"

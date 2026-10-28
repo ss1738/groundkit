@@ -347,13 +347,23 @@ Pass `revision_from="content"` to hash the text deliberately instead.
 ## Install
 
 ```bash
+pip install groundkit-core
+```
+
+```python
+import groundkit          # the import name is unchanged
+```
+
+The distribution is `groundkit-core` because the PyPI name `groundkit` belongs to
+an unrelated project, so `pip install groundkit` does **not** install this
+library. Python ≥ 3.9, no runtime dependencies.
+
+From a clone instead:
+
+```bash
 git clone https://github.com/ss1738/groundkit
 cd groundkit && pip install -e .
 ```
-
-Not published on PyPI. The name `groundkit` there belongs to an unrelated project,
-so `pip install groundkit` does **not** install this library. Python ≥ 3.9, no
-runtime dependencies.
 
 ## Related
 
